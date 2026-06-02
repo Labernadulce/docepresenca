@@ -2726,9 +2726,11 @@ function atualizarMarkupResult(){
   const res=document.getElementById('recMarkupResult')
   const btn=document.getElementById('recMarkupBtn')
   const exp=document.getElementById('recMarkupExplain')
+  const lucro=precoVenda-custoPor
+  const margem=precoVenda>0?Math.round(lucro/precoVenda*100):0
   if(res)res.textContent=precoVenda>0?'→ '+fmt(precoVenda):'—'
   if(btn)btn.innerHTML=precoVenda>0?`<button onclick="salvarPrecoVendaProduto(${precoVenda.toFixed(4)})" style="padding:5px 10px;background:var(--ok);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">💾 Salvar preço</button>`:''
-  if(exp)exp.innerHTML=precoVenda>0?`<div style="padding:6px 14px 10px;font-size:11px;color:var(--txt3)">Custo ${fmt(custoPor)} + ${markup}% = <strong style="color:var(--ok)">${fmt(precoVenda)}</strong> por ${porcoes>1?porLabel:'unidade'}</div>`:''
+  if(exp)exp.innerHTML=precoVenda>0?`<div style="padding:6px 14px 10px;font-size:11px;color:var(--txt3)">Custo ${fmt(custoPor)} + ${markup}% = <strong style="color:var(--ok)">${fmt(precoVenda)}</strong> por ${porcoes>1?porLabel:'unidade'}<br><span style="color:#2E7D32;font-weight:700">Lucro: ${fmt(lucro)} por ${porcoes>1?porLabel:'unidade'} · Margem: ${margem}%</span></div>`:''
 }
 function selectIngRec(i,pId){
   if(pId==='_custom'){tempIng[i].pId='_custom';tempIng[i].nome=''}
@@ -3598,7 +3600,9 @@ function verReceita(id){
       const custoPorVer=porcoesVer>1?totalCusto/porcoesVer:totalCusto
       const porLabelVer=(r.rendimento||'').replace(/^[\d,.]+\s*/,'').trim()||'unidade'
       const precoVendaVer=temCusto&&r.markup>0?custoPorVer*(1+r.markup/100):0
-      const markupRow=precoVendaVer>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;margin-top:4px;border-top:1px solid var(--cream2);font-size:13px;font-weight:700"><span style="color:var(--ok)">Preço de Venda (markup ${r.markup}%)</span><span style="color:var(--ok)">${fmt(precoVendaVer)}<span style="font-size:11px;font-weight:500;margin-left:4px">por ${porcoesVer>1?porLabelVer:'unidade'}</span></span></div>`:''
+      const lucroPorVer=precoVendaVer-custoPorVer
+      const margemVer=precoVendaVer>0?Math.round(lucroPorVer/precoVendaVer*100):0
+      const markupRow=precoVendaVer>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;margin-top:4px;border-top:1px solid var(--cream2);font-size:13px;font-weight:700"><span style="color:var(--ok)">Preço de Venda (markup ${r.markup}%)</span><span style="color:var(--ok)">${fmt(precoVendaVer)}<span style="font-size:11px;font-weight:500;margin-left:4px">por ${porcoesVer>1?porLabelVer:'unidade'}</span></span></div><div style="display:flex;justify-content:space-between;align-items:center;padding-top:4px;font-size:12px;font-weight:700"><span style="color:#2E7D32">Lucro por ${porcoesVer>1?porLabelVer:'unidade'}</span><span style="color:#2E7D32">${fmt(lucroPorVer)}<span style="font-size:11px;font-weight:500;margin-left:4px">(margem ${margemVer}%)</span></span></div>`:''
       const rodape=temCusto?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:2px;font-size:13px;font-weight:700;color:var(--choc)"><span>Custo total da receita</span><span style="color:var(--cara)">${fmt(totalCusto)}</span></div>${markupRow}`:''
       return rows+rodape
     })()}</div>`:''}
@@ -3657,6 +3661,8 @@ function imprimirReceita(id){
   const custoPorPrint=porcoesPrint>1?totalCusto/porcoesPrint:totalCusto
   const porLabelPrint=(r.rendimento||'').replace(/^[\d,.]+\s*/,'').trim()||'unidade'
   const precoVendaPrint=temCusto&&r.markup>0?custoPorPrint*(1+r.markup/100):0
+  const lucroPorPrint=precoVendaPrint-custoPorPrint
+  const margemPrint=precoVendaPrint>0?Math.round(lucroPorPrint/precoVendaPrint*100):0
   const fmtP=v=>'R$'+v.toFixed(2).replace('.',',')
   const w=window.open('','_blank','width=860,height=900')
   w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
@@ -3689,6 +3695,8 @@ function imprimirReceita(id){
     .ic.custo .ic-val{color:#B8600A}
     .ic.venda{background:#EEF8EE;border-color:#8AC88A}
     .ic.venda .ic-val{color:#2E7D32}
+    .ic.lucro{background:#F0FBF0;border-color:#66BB6A}
+    .ic.lucro .ic-val{color:#1B5E20}
     /* ── SEÇÃO ── */
     .sec-titulo{display:flex;align-items:center;gap:8px;margin-bottom:8px;page-break-after:avoid}
     .sec-linha{flex:1;height:1px;background:#D4A574}
@@ -3751,6 +3759,7 @@ function imprimirReceita(id){
     ${r.tcozimento?`<div class="ic"><div class="ic-lbl">Forno/Cozimento</div><div class="ic-val">${r.tcozimento}</div></div>`:''}
     ${temCusto?`<div class="ic custo"><div class="ic-lbl">Custo Total</div><div class="ic-val">${fmtP(totalCusto)}</div></div>`:''}
     ${precoVendaPrint>0?`<div class="ic venda"><div class="ic-lbl">Preço de Venda (${r.markup}%)</div><div class="ic-val">${fmtP(precoVendaPrint)}<span style="font-size:9px;font-weight:600;display:block;color:#4A7A4A">por ${porcoesPrint>1?porLabelPrint:'unidade'}</span></div></div>`:''}
+    ${lucroPorPrint>0?`<div class="ic lucro"><div class="ic-lbl">Lucro (${margemPrint}% margem)</div><div class="ic-val">${fmtP(lucroPorPrint)}<span style="font-size:9px;font-weight:600;display:block;color:#2E7D32">por ${porcoesPrint>1?porLabelPrint:'unidade'}</span></div></div>`:''}
   </div>`:''}
   ${r.ingredientes&&r.ingredientes.length?`
   <div class="sec-titulo"><span class="sec-label">Ingredientes</span><span class="sec-linha"></span></div>
@@ -3760,6 +3769,7 @@ function imprimirReceita(id){
     ${temCusto?`<tfoot>
       <tr><td colspan="2" class="lbl">Custo total da receita</td><td class="val-custo">${fmtP(totalCusto)}</td></tr>
       ${precoVendaPrint>0?`<tr class="venda-row"><td colspan="2" class="lbl" style="color:#2E7D32">Preço de Venda — markup ${r.markup}% — por ${porcoesPrint>1?porLabelPrint:'unidade'}</td><td class="val-venda">${fmtP(precoVendaPrint)}</td></tr>`:''}
+      ${lucroPorPrint>0?`<tr style="background:#F0FBF0"><td colspan="2" class="lbl" style="color:#1B5E20">Lucro estimado (margem ${margemPrint}%) — por ${porcoesPrint>1?porLabelPrint:'unidade'}</td><td class="val-venda" style="color:#1B5E20">${fmtP(lucroPorPrint)}</td></tr>`:''}
     </tfoot>`:''}
   </table>`:''}
   ${r.preparo?`
