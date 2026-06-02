@@ -2526,6 +2526,7 @@ function editReceita(id){
   openModal('Editar Receita',receitaForm(r),
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarReceita()">Atualizar Receita</button>`,true)
   renderIngredientes();renderAudioWidget();atualizarTotalCustoReceita()
+  if(r.markup>0){const el=document.getElementById('recMarkup');if(el){el.value=r.markup;atualizarMarkupResult()}}
 }
 function receitaForm(r){
   return`
@@ -2850,7 +2851,8 @@ function salvarReceita(){
     tpreparo:v('rTprep'),
     tcozimento:v('rTcoz'),
     dif:(document.getElementById('rDif')||{}).value,
-    custo:parseFloat((document.getElementById('rCusto')||{}).value)||0,
+    custo:_calcCustoBase().total,
+    markup:parseFloat((document.getElementById('recMarkup')||{}).value)||0,
     prodId:(document.getElementById('rProdId')||{}).value||'',
     ingredientes:tempIng.filter(x=>(x.pId&&x.pId!=='_custom')||x.nome.trim()),
     preparo:(document.getElementById('rPreparo')||{}).value||'',
@@ -3592,7 +3594,12 @@ function verReceita(id){
           <span style="font-size:12px;color:var(--txt3);font-weight:600;white-space:nowrap">${custo!=null?fmt(custo):'—'}</span>
         </div>`
       }).join('')
-      const rodape=temCusto?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:2px;font-size:13px;font-weight:700;color:var(--choc)"><span>Custo total da receita</span><span style="color:var(--cara)">${fmt(totalCusto)}</span></div>`:''
+      const porcoesVer=parseFloat((r.rendimento||'').replace(',','.').match(/[\d.]+/)?.[0])||0
+      const custoPorVer=porcoesVer>1?totalCusto/porcoesVer:totalCusto
+      const porLabelVer=(r.rendimento||'').replace(/^[\d,.]+\s*/,'').trim()||'unidade'
+      const precoVendaVer=temCusto&&r.markup>0?custoPorVer*(1+r.markup/100):0
+      const markupRow=precoVendaVer>0?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:6px;margin-top:4px;border-top:1px solid var(--cream2);font-size:13px;font-weight:700"><span style="color:var(--ok)">Preço de Venda (markup ${r.markup}%)</span><span style="color:var(--ok)">${fmt(precoVendaVer)}<span style="font-size:11px;font-weight:500;margin-left:4px">por ${porcoesVer>1?porLabelVer:'unidade'}</span></span></div>`:''
+      const rodape=temCusto?`<div style="display:flex;justify-content:space-between;align-items:center;padding-top:8px;margin-top:2px;font-size:13px;font-weight:700;color:var(--choc)"><span>Custo total da receita</span><span style="color:var(--cara)">${fmt(totalCusto)}</span></div>${markupRow}`:''
       return rows+rodape
     })()}</div>`:''}
     ${r.preparo||r.audioPrep?`
