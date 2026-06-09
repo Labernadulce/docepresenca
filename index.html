@@ -952,6 +952,7 @@ function novoOrc(){
     <div class="fg"><label>Data</label><input type="date" id="oData" value="${today()}"></div></div>
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${new Date(Date.now()+30*86400000).toISOString().split('T')[0]}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="0" min="0" oninput="calcOrcTotals()"></div></div>
+    <div class="fg"><label>Forma de Pagamento</label><select id="oPgto"><option value="">A combinar</option><option>Pix</option><option>Dinheiro</option><option>Cartão de Crédito</option><option>Cartão de Débito</option><option>Transferência</option><option>Boleto</option><option>50% entrada + 50% entrega</option><option>Parcelado</option></select></div>
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
     <div class="items-tbl">
       <div class="items-hdr"><span>Produto</span><span>Qtd</span><span>Preço Unit.</span><span>Subtotal</span><span></span></div>
@@ -993,7 +994,8 @@ function renderOItens(){
         <span id="orc_sub_${i}" style="font-size:12px;color:var(--txt2);font-weight:600">${fmt(it.sub||0)}</span>
         <button class="btn-ic btn-d" onclick="removeOrcItem(${i})" style="padding:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
-      ${it.pId==='_custom'?`<div style="padding:0 11px 8px"><input id="orc_nome_${i}" placeholder="Nome do item personalizado..." value="${it.nome||''}" oninput="tempItems[${i}].nome=this.value" style="width:100%;padding:6px 10px;border:1.5px solid var(--cara);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt)"></div>`:''}
+      ${it.pId==='_custom'?`<div style="padding:0 11px 4px"><input id="orc_nome_${i}" placeholder="Nome do item personalizado..." value="${it.nome||''}" oninput="tempItems[${i}].nome=this.value" style="width:100%;padding:6px 10px;border:1.5px solid var(--cara);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt)"></div>`:''}
+      <div style="padding:0 11px 8px"><input placeholder="Observação deste item..." value="${it.obs||''}" oninput="tempItems[${i}].obs=this.value" style="width:100%;padding:5px 10px;border:1.5px solid var(--cream2);border-radius:6px;font-size:11px;font-family:inherit;outline:none;color:var(--txt3);background:var(--ivory)"></div>
     </div>`).join('')
 }
 function selectProdOrc(i,pId){
@@ -1028,6 +1030,7 @@ function editOrc(id){
     <div class="fg"><label>Data</label><input type="date" id="oData" value="${o.data}"></div></div>
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${o.validade||''}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="${o.desc||0}" min="0" oninput="calcOrcTotals()"></div></div>
+    <div class="fg"><label>Forma de Pagamento</label><select id="oPgto"><option value="" ${!o.pgto?'selected':''}>A combinar</option>${['Pix','Dinheiro','Cartão de Crédito','Cartão de Débito','Transferência','Boleto','50% entrada + 50% entrega','Parcelado'].map(p=>`<option ${o.pgto===p?'selected':''}>${p}</option>`).join('')}</select></div>
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
     <div class="items-tbl"><div class="items-hdr"><span>Produto</span><span>Qtd</span><span>Preço Unit.</span><span>Subtotal</span><span></span></div><div id="oItens"></div></div>
     <button class="btn btn-s btn-sm" onclick="addOrcItem()">+ Item</button>
@@ -1062,6 +1065,7 @@ function salvarOrc(){
   const itens=tempItems.filter(x=>x.nome||x.sub>0)
   if(!itens.length){toast('Adicione ao menos um item','err');return}
   const total=itens.reduce((a,x)=>a+x.sub,0);const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
+  const pgto=(document.getElementById('oPgto')||{}).value||undefined
   const dataEvento=(document.getElementById('oDataEvento')||{}).value||undefined
   const dataEntrega=(document.getElementById('oDataEntrega')||{}).value||undefined
   const horaEntrega=(document.getElementById('oHoraEntrega')||{}).value||undefined
@@ -1071,10 +1075,10 @@ function salvarOrc(){
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento salvo!','ok')
   }
   render('orcamentos')
@@ -1151,11 +1155,11 @@ function verOrc(id){
   const bdg={pendente:'bdg-y',aprovado:'bdg-g',recusado:'bdg-r'}
   openModal('Orçamento',`
     <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-      <div><strong>${clienteNome(o.cliId)}</strong><div style="font-size:12px;color:var(--txt3)">${fmtDate(o.data)} · Válido até ${fmtDate(o.validade)}</div></div>
+      <div><strong>${clienteNome(o.cliId)}</strong><div style="font-size:12px;color:var(--txt3)">${fmtDate(o.data)} · Válido até ${fmtDate(o.validade)}${o.pgto?' · '+o.pgto:''}</div></div>
       <span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span>
     </div>
     <div class="tc"><table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>
-      ${o.itens.map(i=>`<tr><td>${i.nome}${i.desc?`<br><small style="color:var(--txt3)">${i.desc}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')}
+      ${o.itens.map(i=>`<tr><td>${i.nome}${i.desc?`<br><small style="color:var(--txt3)">${i.desc}</small>`:''} ${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')}
     </tbody></table></div>
     <div style="margin-top:12px" class="totbox">
       <div class="trow"><span>Subtotal</span><span>${fmt(o.total)}</span></div>
@@ -3979,6 +3983,7 @@ function imprimirOrc(id){
       ${o.dataEvento?`<span>DATA DO EVENTO: ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
       ${o.entrega?`<span>MODALIDADE: ${o.entrega==='entrega'?'LABERNA DULCE ENTREGA':'CLIENTE RETIRA'}</span>`:''}
+      ${o.pgto?`<span>PAGAMENTO: ${o.pgto}</span>`:''}
     </div>
     ${o.endEntrega?`<div style="margin:0 0 14px;padding:10px 14px;background:#FDF8EE;border-left:4px solid #B8912A;border-radius:0 6px 6px 0;font-size:13px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E;display:block;margin-bottom:3px">Endereço de Entrega</span><strong style="color:#1C1A18">${o.endEntrega}</strong></div>`:''}
     ${cliBlock(cli)}
@@ -3995,7 +4000,7 @@ function imprimirOrc(id){
       <tbody>
         ${o.itens.map((it,i)=>`<tr>
           <td class="n">${i+1}</td>
-          <td>${it.nome||it.desc||''}</td>
+          <td>${it.nome||it.desc||''}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
           <td class="c">Un</td>
           <td class="c">${it.qtd}</td>
           <td class="r">${fmt(it.pu)}</td>
