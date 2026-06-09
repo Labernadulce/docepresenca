@@ -4301,7 +4301,7 @@ function showClientView(raw){
           </div>
         </div>
         <div class="cv-cab-right">
-          ${[ef,ew&&ew!==ef?ew:'',ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')}
+          ${(()=>{const _sd=s=>(s||'').replace(/\D/g,'');const _eq=(a,b)=>{const na=_sd(a),nb=_sd(b);return na&&nb&&(na===nb||na.endsWith(nb)||nb.endsWith(na))};return[ew||ef,(!ew&&ef)||_eq(ef,ew)?'':ef,ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')})()}
         </div>
       </div>
 
