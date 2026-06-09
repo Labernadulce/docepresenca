@@ -3970,6 +3970,21 @@ function docFoot(obs,assinatura){
 function imprimirOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
+  const prods=DB.get(S.PRODUTOS)
+  const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
+  const cats=[...new Set(o.itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
+  let num=0
+  const rows=cats.flatMap(cat=>[
+    `<tr><td colspan="6" style="background:#4A2C1E;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border:none">${cat}</td></tr>`,
+    ...o.itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
+          <td class="n">${num}</td>
+          <td>${it.nome||it.desc||''}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+          <td class="c">Un</td>
+          <td class="c">${it.qtd}</td>
+          <td class="r">${fmt(it.pu)}</td>
+          <td class="r">${fmt(it.sub)}</td>
+        </tr>`})
+  ]).join('')
   const w=window.open('','_blank','width=900,height=700')
   w.document.write(docHead('ORÇAMENTO')+
     `<div class="doc-title-row">
@@ -3997,16 +4012,7 @@ function imprimirOrc(id){
         <th class="r">VR. UNIT.</th>
         <th class="r">SUBTOTAL</th>
       </tr></thead>
-      <tbody>
-        ${o.itens.map((it,i)=>`<tr>
-          <td class="n">${i+1}</td>
-          <td>${it.nome||it.desc||''}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
-          <td class="c">Un</td>
-          <td class="c">${it.qtd}</td>
-          <td class="r">${fmt(it.pu)}</td>
-          <td class="r">${fmt(it.sub)}</td>
-        </tr>`).join('')}
-      </tbody>
+      <tbody>${rows}</tbody>
     </table>
     ${o.desc>0?`<div class="disc-row"><span>Desconto</span><span>- ${fmt(o.desc)}</span></div>`:''}
     <div class="total-row"><span>TOTAL</span><span>${fmt(o.totalF)}</span></div>`
@@ -4096,20 +4102,38 @@ function imprimirOS(id){
 }
 
 // ===== LINK CLIENTE =====
-function gerarLinkOrc(id){
+async function _b64compress(str){
+  try{
+    const stream=new Blob([new TextEncoder().encode(str)]).stream().pipeThrough(new CompressionStream('deflate-raw'))
+    const buf=await new Response(stream).arrayBuffer()
+    const bytes=new Uint8Array(buf);let s=''
+    for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i])
+    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
+  }catch{return null}
+}
+async function _b64decompress(b64){
+  const bin=atob(b64.replace(/-/g,'+').replace(/_/g,'/'))
+  const bytes=new Uint8Array(bin.length)
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i)
+  const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+  return await new Response(stream).text()
+}
+async function gerarLinkOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
   const e=getEmpresa()
-  // Payload mínimo: só inclui campos não-vazios; itens como arrays [nome,qtd,sub]
   const p={}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa
-  p.i=o.id.slice(-4).toUpperCase();p.v=o.validade;p.t=o.total
+  p.i=o.id.slice(-4).toUpperCase();p.v=o.validade
   if(o.desc)p.d=o.desc;p.tf=o.totalF
   if(o.obs)p.ob=o.obs
   p.it=o.itens.map(x=>[x.nome||x.desc||'',x.qtd,x.sub])
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
-  const url=`${location.origin}${location.pathname}#orcview=${btoa(unescape(encodeURIComponent(JSON.stringify(p)))).replace(/=+$/,'')}`
+  const json=JSON.stringify(p)
+  const compressed=await _b64compress(json)
+  const encoded=compressed?'z.'+compressed:btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'')
+  const url=`${location.origin}${location.pathname}#orcview=${encoded}`
   openModal('Link para o Cliente',`
     <div style="margin-bottom:14px;padding:12px;background:var(--cream);border-radius:8px;font-size:12px;color:var(--txt2)">
       Compartilhe este link com o cliente. Ele poderá visualizar e aprovar o orçamento.
@@ -4127,12 +4151,19 @@ function copiarLink(){
   const el=document.getElementById('linkUrl');if(!el)return
   navigator.clipboard.writeText(el.value).then(()=>toast('Link copiado!','ok')).catch(()=>{el.select();document.execCommand('copy');toast('Link copiado!','ok')})
 }
-function checkClientView(){
+async function checkClientView(){
   const hash=location.hash
   if(!hash.startsWith('#orcview='))return
   try{
-    const b64=hash.slice(9).replace(/-/g,'+').replace(/_/g,'/');const pad=b64.length%4?'='.repeat(4-b64.length%4):'';
-    const data=JSON.parse(decodeURIComponent(escape(atob(b64+pad))))
+    const val=hash.slice(9)
+    let data
+    if(val.startsWith('z.')){
+      const json=await _b64decompress(val.slice(2))
+      data=JSON.parse(json)
+    }else{
+      const b64=val.replace(/-/g,'+').replace(/_/g,'/');const pad=b64.length%4?'='.repeat(4-b64.length%4):''
+      data=JSON.parse(decodeURIComponent(escape(atob(b64+pad))))
+    }
     showClientView(data)
   }catch(err){console.error(err)}
 }
