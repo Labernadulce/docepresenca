@@ -3919,8 +3919,8 @@ function docHead(titulo){
   .doc-msg{font-size:11px;color:#8A7E6E;margin-bottom:12px;font-style:italic}
   .info-bar{display:flex;flex-wrap:wrap;gap:8px 24px;background:#E8E3DC;padding:8px 12px;font-size:12px;font-weight:700;color:#1C1A18;margin-bottom:14px}
   .info-bar span{white-space:nowrap}
-  .prod-hdr{background:#1C1A18;color:#fff;padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
-  .prod-table{width:100%;border-collapse:collapse;font-size:12px}
+  .prod-hdr{background:#1C1A18;color:#fff;padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:0}
+  .prod-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
   .prod-table thead th{background:#4A2C1E;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #6A3C2E}
   .prod-table thead th.r{text-align:right}.prod-table thead th.c{text-align:center}
   .prod-table tbody tr:nth-child(even){background:#fdf8f3}
@@ -3998,7 +3998,7 @@ function imprimirOrc(id){
     <p class="doc-msg">Por favor verifique todas as informações antes de assinar o orçamento.</p>
     <div class="info-bar">
       <span>VALIDADE DA PROPOSTA: ${fmtDate(o.validade)}</span>
-      ${o.noivos?`<span>EVENTO: ${o.noivos}</span>`:''}
+      ${o.noivos?`<span>NOME DOS NOIVOS: ${o.noivos}</span>`:''}
       ${o.dataEvento?`<span>DATA DO EVENTO: ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
       ${o.entrega?`<span>MODALIDADE: ${o.entrega==='entrega'?'LABERNA DULCE ENTREGA':'CLIENTE RETIRA'}</span>`:''}
@@ -4036,7 +4036,7 @@ function imprimirVenda(id){
     <div class="info-bar">
       <span>PAGAMENTO: ${vd.pgto||'—'}</span>
       <span>STATUS: ${vd.status==='pago'?'✓ PAGO':'PENDENTE'}</span>
-      ${vd.noivos?`<span>EVENTO: ${vd.noivos}</span>`:''}
+      ${vd.noivos?`<span>NOME DOS NOIVOS: ${vd.noivos}</span>`:''}
     </div>
     ${cliBlock(cli)}
     <div class="prod-hdr">PRODUTOS</div>
@@ -4079,7 +4079,7 @@ function imprimirOS(id){
     <div class="info-bar">
       <span>STATUS: ${lblOS[os.status]||os.status}</span>
       ${os.prazo?`<span>PRAZO: ${fmtDate(os.prazo)}</span>`:''}
-      ${os.noivos?`<span>EVENTO: ${os.noivos}</span>`:''}
+      ${os.noivos?`<span>NOME DOS NOIVOS: ${os.noivos}</span>`:''}
     </div>
     ${cliBlock(cli)}
     ${os.responsavel?`<div style="margin-bottom:14px;padding:8px 12px;background:#F0EDE8;border:1px solid #DDD9D2;font-size:12px"><strong>Responsável:</strong> ${os.responsavel}</div>`:''}
