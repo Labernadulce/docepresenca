@@ -4156,19 +4156,33 @@ async function gerarLinkOrc(id){
   const json=JSON.stringify(p)
   const compressed=await _b64compress(json)
   const encoded=compressed?'z.'+compressed:btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'')
-  const url=`${location.origin}${location.pathname}#orcview=${encoded}`
+  const longUrl=`${location.origin}${location.pathname}#orcview=${encoded}`
+  const wa=e.wa?e.wa.replace(/\D/g,''):''
+  const _waBtn=u=>`<div style="margin-top:12px"><a href="https://wa.me/${wa}?text=${encodeURIComponent('Olá! Segue o link do seu orçamento: '+u)}" target="_blank" class="btn btn-ok" style="width:100%;justify-content:center;text-decoration:none;display:flex">Enviar via WhatsApp</a></div>`
   openModal('Link para o Cliente',`
     <div style="margin-bottom:14px;padding:12px;background:var(--cream);border-radius:8px;font-size:12px;color:var(--txt2)">
       Compartilhe este link com o cliente. Ele poderá visualizar e aprovar o orçamento.
     </div>
     <div class="fg"><label>Link do Orçamento</label>
       <div style="display:flex;gap:8px;align-items:center">
-        <input id="linkUrl" value="${url}" readonly style="flex:1;font-size:11px;background:var(--cream)">
+        <input id="linkUrl" value="Gerando link curto…" readonly style="flex:1;font-size:11px;background:var(--cream);color:var(--txt3)">
         <button class="btn btn-s btn-sm" onclick="copiarLink()">Copiar</button>
       </div>
+      <div id="linkInfo" style="font-size:11px;color:var(--txt3);margin-top:4px">Aguarde…</div>
     </div>
-    ${e.wa?`<div style="margin-top:12px"><a href="https://wa.me/${e.wa.replace(/\D/g,'')}?text=${encodeURIComponent('Olá! Segue o link do seu orçamento: '+url)}" target="_blank" class="btn btn-ok" style="width:100%;justify-content:center;text-decoration:none;display:flex">Enviar via WhatsApp</a></div>`:'<div style="font-size:12px;color:var(--txt3);margin-top:8px">Dica: cadastre o WhatsApp em Minha Empresa para envio direto.</div>'}`,
+    <div id="waBtnBox">${wa?'':('<div style="font-size:12px;color:var(--txt3);margin-top:8px">Dica: cadastre o WhatsApp em Minha Empresa para envio direto.</div>')}</div>`,
     `<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
+  let finalUrl=longUrl
+  try{
+    const r=await fetch(`https://is.gd/create.php?format=simple&url=${encodeURIComponent(longUrl)}`,{signal:AbortSignal.timeout(6000)})
+    if(r.ok){const t=(await r.text()).trim();if(t.startsWith('http'))finalUrl=t}
+  }catch{}
+  const inp=document.getElementById('linkUrl')
+  const info=document.getElementById('linkInfo')
+  const waBox=document.getElementById('waBtnBox')
+  if(inp){inp.value=finalUrl;inp.style.color=''}
+  if(info)info.textContent=finalUrl===longUrl?'Link gerado (sem encurtamento).':'Link encurtado com sucesso!'
+  if(waBox&&wa)waBox.innerHTML=_waBtn(finalUrl)
 }
 function copiarLink(){
   const el=document.getElementById('linkUrl');if(!el)return
