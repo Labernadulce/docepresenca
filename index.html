@@ -358,6 +358,7 @@ let tempAudioPrep=null, mediaRecorder=null, audioChunks=[], recordingTimer=null,
 
 // ===== UTILS =====
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+function orcNumFmt(o){if(o&&o.num)return String(o.num).padStart(3,'0');const all=DB.get(S.ORCAMENTOS);const idx=all.findIndex(x=>x.id===o.id);return idx>=0?String(idx+1).padStart(3,'0'):'001'}
 function fmt(n){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n||0)}
 function fmtN(n){return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0)}
 function fmtDate(d){if(!d)return'-';return new Date(d+'T12:00:00').toLocaleDateString('pt-BR')}
@@ -908,7 +909,7 @@ function renderOrcTable(){
   const el=document.getElementById('orcTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum orçamento</h3><p>Crie o primeiro orçamento</p></div>`;return}
   const spCfg={aberto:{l:'🔵 Aberto',c:'#5A8FD0',bg:'#EEF3FF',b:'#B8C8F0'},produzindo:{l:'🟡 Produzindo',c:'#B07030',bg:'#FFF3DC',b:'#F0C878'},produzido:{l:'🟢 Produzido',c:'#2E7D32',bg:'#EFF9F0',b:'#A5D6A7'},cancelado:{l:'🔴 Cancelado',c:'#B71C1C',bg:'#FFF0F0',b:'#FFAAAA'}}
-  el.innerHTML=`<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Validade</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Produção</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Validade</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Produção</th><th></th></tr></thead><tbody>
     ${rows.map(o=>{
       const sp=o.statusProd||'aberto'
       const sc=spCfg[sp]||spCfg.aberto
@@ -922,7 +923,7 @@ function renderOrcTable(){
           </select>`
         :`<span style="color:var(--txt3);font-size:12px">—</span>`
       return`<tr>
-      <td>${fmtDate(o.data)}</td><td><strong>${clienteNome(o.cliId)}</strong></td>
+      <td style="font-weight:700;color:var(--cara);white-space:nowrap">${orcNumFmt(o)}</td><td>${fmtDate(o.data)}</td><td><strong>${clienteNome(o.cliId)}</strong></td>
       <td><span class="bdg" style="background:var(--cream2);color:var(--txt2)">${o.itens.length} item(s)</span></td>
       <td style="font-weight:600">${fmtDate(o.validade)}</td>
       <td><span style="font-size:12px;color:var(--txt2)">${o.pgto||'<span style="color:var(--txt3)">—</span>'}</span></td>
@@ -1079,7 +1080,7 @@ function salvarOrc(){
     if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento salvo!','ok')
   }
   render('orcamentos')
@@ -2386,7 +2387,7 @@ function renderOSTable(){
       return`<tr>
       <td><strong>#${String(os.num).padStart(3,'0')}</strong></td>
       <td><strong>${clienteNome(os.cliId)}</strong></td>
-      <td><span class="bdg bdg-b">${orc?'Orç #'+orc.id.slice(-4).toUpperCase():'Manual'}</span></td>
+      <td><span class="bdg bdg-b">${orc?'Orç Nº '+orcNumFmt(orc):'Manual'}</span></td>
       <td>${fmtDate(os.data)}</td>
       <td>${os.prazo?`<span style="color:${os.prazo<today()&&os.status!=='concluida'?'var(--bad)':'inherit'}">${fmtDate(os.prazo)}</span>`:'—'}</td>
       <td><strong>${fmt(os.total)}</strong></td>
@@ -3998,7 +3999,7 @@ function imprimirOrc(id){
       <div>
         <div style="font-size:9px;letter-spacing:2.5px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:6px">Proposta Comercial</div>
         <div style="font-family:'Palatino Linotype',serif;font-size:28px;font-weight:bold;color:#3D3028;letter-spacing:.5px;line-height:1">
-          ORÇAMENTO&nbsp;&nbsp;<span style="color:#B8912A;font-size:32px">#${id.slice(-4).toUpperCase()}</span>
+          ORÇAMENTO&nbsp;&nbsp;<span style="color:#B8912A;font-size:32px">Nº&nbsp;${orcNumFmt(o)}</span>
         </div>
       </div>
       <div style="text-align:right">
@@ -4150,7 +4151,7 @@ async function gerarLinkOrc(id){
   if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa
   const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   if(_ea)p.ea=_ea
-  p.i=o.id.slice(-4).toUpperCase();p.dt=o.data;p.v=o.validade
+  p.i=orcNumFmt(o);p.dt=o.data;p.v=o.validade
   if(o.desc){p.d=o.desc;p.t=o.total}p.tf=o.totalF
   if(o.obs)p.ob=o.obs
   if(o.noivos)p.nv=o.noivos
@@ -4221,7 +4222,7 @@ function showClientView(raw){
   if(raw.o){
     const {o,cli,e}=raw
     nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
-    oid=o.id.slice(-4).toUpperCase();dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
+    oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
     nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||''
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
@@ -4307,7 +4308,7 @@ function showClientView(raw){
       <div class="cv-title">
         <div>
           <div style="font-size:9px;letter-spacing:2.5px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:6px">Proposta Comercial</div>
-          <div class="cv-orcnum">ORÇAMENTO&nbsp;&nbsp;<span style="color:#B8912A;font-size:32px">#${oid}</span></div>
+          <div class="cv-orcnum">ORÇAMENTO&nbsp;&nbsp;<span style="color:#B8912A;font-size:32px">Nº&nbsp;${oid}</span></div>
         </div>
         <div style="text-align:right">
           <div style="font-size:9px;letter-spacing:1.5px;color:#9A8E82;text-transform:uppercase;margin-bottom:4px">Data</div>
