@@ -3979,7 +3979,7 @@ function imprimirOrc(id){
   const cats=[...new Set(o.itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
   let num=0
   const rows=cats.flatMap(cat=>[
-    `<tr><td colspan="6" style="background:#4A2C1E;color:#fff;padding:6px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border:none">${cat}</td></tr>`,
+    `<tr><td colspan="6" style="background:#6B3F2A;color:#fff;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #8A5040">${cat}</td></tr>`,
     ...o.itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
           <td class="n">${num}</td>
           <td>${it.nome||it.desc||''}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
