@@ -1160,7 +1160,7 @@ function verOrc(id){
       <span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span>
     </div>
     <div class="tc"><table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>
-      ${o.itens.map(i=>`<tr><td>${i.nome}${i.desc?`<br><small style="color:var(--txt3)">${i.desc}</small>`:''} ${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')}
+      ${(()=>{const _ps=DB.get(S.PRODUTOS);const _gn=i=>{if(!i.pId||i.pId==='_custom')return i.nome||'';const _p=_ps.find(x=>x.id===i.pId);return _p?_p.nome:(i.nome||'')};return o.itens.map(i=>`<tr><td>${_gn(i)}${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')})()}
       <tr style="background:var(--cream)"><td style="font-size:12px;color:var(--txt2);font-weight:600;padding:6px 10px">Total de itens</td><td style="font-weight:700;color:var(--cara);padding:6px 10px;text-align:center">${o.itens.reduce((a,x)=>a+(parseFloat(x.qtd)||0),0)}</td><td></td><td></td></tr>
     </tbody></table></div>
     <div style="margin-top:12px" class="totbox">
@@ -3979,13 +3979,14 @@ function imprimirOrc(id){
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
   const prods=DB.get(S.PRODUTOS)
   const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
+  const getNomeProd=it=>{if(!it.pId||it.pId==='_custom')return it.nome||it.desc||'';const _p=prods.find(x=>x.id===it.pId);return _p?_p.nome:(it.nome||it.desc||'')}
   const cats=[...new Set(o.itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
   let num=0
   const rows=cats.flatMap(cat=>[
     `<tr><td colspan="6" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
     ...o.itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
           <td class="n">${num}</td>
-          <td>${it.nome||it.desc||''}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+          <td>${getNomeProd(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
           <td class="c">Un</td>
           <td class="c">${it.qtd}</td>
           <td class="r">${fmt(it.pu)}</td>
@@ -4157,7 +4158,8 @@ async function gerarLinkOrc(id){
   if(o.obs)p.ob=o.obs
   const _prods=DB.get(S.PRODUTOS)
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
-  p.it=o.itens.map(x=>[x.nome||x.desc||'',x.qtd,x.sub,_gc(x.pId)])
+  const _gn=x=>{if(!x.pId||x.pId==='_custom')return x.nome||x.desc||'';const _p=_prods.find(p=>p.id===x.pId);return _p?_p.nome:(x.nome||x.desc||'')}
+  p.it=o.itens.map(x=>[_gn(x),x.qtd,x.sub,_gc(x.pId)])
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
   const json=JSON.stringify(p)
   const compressed=await _b64compress(json)
