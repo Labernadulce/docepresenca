@@ -4006,15 +4006,22 @@ function imprimirOrc(id){
       </div>
     </div>
     <p class="doc-msg">Por favor verifique todas as informações antes de assinar o orçamento.</p>
-    <div class="info-bar">
-      <span>VALIDADE DA PROPOSTA: ${fmtDate(o.validade)}</span>
-      ${o.noivos?`<span>NOME DOS NOIVOS: ${o.noivos}</span>`:''}
-      ${o.dataEvento?`<span>DATA DO EVENTO: ${fmtDate(o.dataEvento)}</span>`:''}
-      ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
-      ${o.entrega?`<span>MODALIDADE: ${o.entrega==='entrega'?'LABERNA DULCE ENTREGA':'CLIENTE RETIRA'}</span>`:''}
-      ${o.pgto?`<span>PAGAMENTO: ${o.pgto}</span>`:''}
+    <div style="margin-bottom:16px;border:1px solid #DDD5C8;border-radius:6px;overflow:hidden">
+      <div style="display:flex;flex-wrap:wrap">
+        ${(()=>{
+          const cell=(lbl,val,icon)=>`<div style="flex:1;min-width:160px;padding:11px 16px;background:#FAF7F4;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#9A8E82;margin-bottom:5px;font-weight:700">${lbl}</div><div style="font-size:13px;font-weight:700;color:#3D3028;line-height:1.3">${val}</div></div>`
+          const r=[]
+          r.push(cell('Validade da Proposta',fmtDate(o.validade)))
+          if(o.noivos)r.push(cell('Nome dos Noivos',o.noivos))
+          if(o.dataEvento)r.push(cell('Data do Evento',fmtDate(o.dataEvento)))
+          if(o.dataEntrega)r.push(cell('Data da Entrega',fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:'')))
+          if(o.entrega)r.push(cell('Modalidade',o.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'))
+          if(o.pgto)r.push(cell('Forma de Pagamento',o.pgto))
+          if(o.endEntrega)r.push(cell('Endereço de Entrega',o.endEntrega))
+          return r.join('')
+        })()}
+      </div>
     </div>
-    ${o.endEntrega?`<div style="margin:0 0 14px;padding:10px 14px;background:#FDF8EE;border-left:4px solid #B8912A;border-radius:0 6px 6px 0;font-size:13px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E;display:block;margin-bottom:3px">Endereço de Entrega</span><strong style="color:#1C1A18">${o.endEntrega}</strong></div>`:''}
     ${cliBlock(cli)}
     <div class="prod-hdr">PRODUTOS</div>
     <table class="prod-table">
