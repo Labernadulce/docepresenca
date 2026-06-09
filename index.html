@@ -957,6 +957,17 @@ function novoOrc(){
     <button class="btn btn-s btn-sm" onclick="addOrcItem()">+ Item</button>
     <div style="margin-top:12px" id="oTotals"></div>
     <div class="fg" style="margin-top:10px"><label>Nome dos Noivos / Evento</label><input id="oNoivos" placeholder="Ex: Ana &amp; Carlos — Casamento 15/06"></div>
+    <div class="frow">
+      <div class="fg"><label>Data do Evento</label><input type="date" id="oDataEvento"></div>
+      <div class="fg"><label>Data da Entrega</label><input type="date" id="oDataEntrega"></div>
+    </div>
+    <div class="fg"><label>Modalidade</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="oEntrega" value="retira" checked onchange="toggleEndEntregaOrc()"> Cliente Retira</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="oEntrega" value="entrega" onchange="toggleEndEntregaOrc()"> Laberna Dulce Entrega</label>
+      </div>
+    </div>
+    <div class="fg" id="oEndEntregaGrp" style="display:none"><label>Endereço de Entrega</label><input id="oEndEntrega" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento..."></textarea></div>`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">Salvar Orçamento</button>`,true)
   renderOItens();calcOrcTotals()
@@ -1018,9 +1029,26 @@ function editOrc(id){
     <button class="btn btn-s btn-sm" onclick="addOrcItem()">+ Item</button>
     <div style="margin-top:12px" id="oTotals"></div>
     <div class="fg" style="margin-top:10px"><label>Nome dos Noivos / Evento</label><input id="oNoivos" value="${o.noivos||''}" placeholder="Ex: Ana &amp; Carlos — Casamento 15/06"></div>
+    <div class="frow">
+      <div class="fg"><label>Data do Evento</label><input type="date" id="oDataEvento" value="${o.dataEvento||''}"></div>
+      <div class="fg"><label>Data da Entrega</label><input type="date" id="oDataEntrega" value="${o.dataEntrega||''}"></div>
+    </div>
+    <div class="fg"><label>Modalidade</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="oEntrega" value="retira" ${!o.entrega||o.entrega==='retira'?'checked':''} onchange="toggleEndEntregaOrc()"> Cliente Retira</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="oEntrega" value="entrega" ${o.entrega==='entrega'?'checked':''} onchange="toggleEndEntregaOrc()"> Laberna Dulce Entrega</label>
+      </div>
+    </div>
+    <div class="fg" id="oEndEntregaGrp" style="display:${o.entrega==='entrega'?'block':'none'}"><label>Endereço de Entrega</label><input id="oEndEntrega" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento...">${o.obs||''}</textarea></div>`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">Atualizar Orçamento</button>`,true)
   renderOItens();calcOrcTotals()
+}
+
+function toggleEndEntregaOrc(){
+  const sel=document.querySelector('input[name="oEntrega"]:checked')
+  const grp=document.getElementById('oEndEntregaGrp')
+  if(grp)grp.style.display=sel&&sel.value==='entrega'?'block':'none'
 }
 
 function salvarOrc(){
@@ -1029,13 +1057,18 @@ function salvarOrc(){
   const itens=tempItems.filter(x=>x.nome||x.sub>0)
   if(!itens.length){toast('Adicione ao menos um item','err');return}
   const total=itens.reduce((a,x)=>a+x.sub,0);const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
+  const dataEvento=(document.getElementById('oDataEvento')||{}).value||undefined
+  const dataEntrega=(document.getElementById('oDataEntrega')||{}).value||undefined
+  const entregaSel=document.querySelector('input[name="oEntrega"]:checked')
+  const entrega=entregaSel?entregaSel.value:'retira'
+  const endEntrega=entrega==='entrega'?v('oEndEntrega')||undefined:undefined
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,noivos:v('oNoivos'),obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,noivos:v('oNoivos'),dataEvento,dataEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',noivos:v('oNoivos'),obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',noivos:v('oNoivos'),dataEvento,dataEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento salvo!','ok')
   }
   render('orcamentos')
@@ -1123,6 +1156,12 @@ function verOrc(id){
       ${o.desc>0?`<div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(o.desc)}</span></div>`:''}
       <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
     </div>
+    ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
+      ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
+      ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}</span>`:''}
+      ${o.entrega?`<span><strong style="color:var(--txt2)">Modalidade:</strong> ${o.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</span>`:''}
+      ${o.endEntrega?`<span style="width:100%"><strong style="color:var(--txt2)">Endereço:</strong> ${o.endEntrega}</span>`:''}
+    </div>`:''}
     ${o.obs?`<div style="margin-top:8px;font-size:13px;color:var(--txt3)">Obs: ${o.obs}</div>`:''}`,
     `<button class="btn btn-s" onclick="closeModal()">Fechar</button>
      <button class="btn btn-s" onclick="imprimirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg> Imprimir</button>
