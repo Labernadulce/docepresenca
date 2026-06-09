@@ -4148,11 +4148,16 @@ async function gerarLinkOrc(id){
   const e=getEmpresa()
   const p={}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
+  const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
   if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa
+  const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
+  if(_ea)p.ea=_ea
   p.i=o.id.slice(-4).toUpperCase();p.v=o.validade
-  if(o.desc)p.d=o.desc;p.tf=o.totalF
+  if(o.desc){p.d=o.desc;p.t=o.total}p.tf=o.totalF
   if(o.obs)p.ob=o.obs
-  p.it=o.itens.map(x=>[x.nome||x.desc||'',x.qtd,x.sub])
+  const _prods=DB.get(S.PRODUTOS)
+  const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
+  p.it=o.itens.map(x=>[x.nome||x.desc||'',x.qtd,x.sub,_gc(x.pId)])
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
   const json=JSON.stringify(p)
   const compressed=await _b64compress(json)
@@ -4206,69 +4211,82 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw){
-  // Suporta formato compacto (novo) e formato completo (links antigos)
-  let nome,ef,ee,ew,oid,validade,total,desc,totalF,obs,itens,clinome,clifone
+  let nome,er,ea,ef,ee,ew,oid,validade,total,desc,totalF,obs,itens,clinome,clifone
   if(raw.o){
     const {o,cli,e}=raw
-    nome=e.fantasia||e.nome||'Confeitaria';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
+    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
     oid=o.id.slice(-4).toUpperCase();validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
-    itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,s:x.sub}));clinome=cli.nome||'';clifone=cli.fone||''
+    itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
-    nome=raw.n||'Confeitaria';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
+    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
     oid=raw.i||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
-    itens=(raw.it||[]).map(x=>Array.isArray(x)?{n:x[0],q:x[1],s:x[2]}:x)
+    itens=(raw.it||[]).map(x=>Array.isArray(x)?{n:x[0],q:x[1],s:x[2],c:x[3]||'Outros'}:x)
     clinome=raw.cn||'';clifone=raw.cf||''
   }
+  // Agrupar itens por categoria
+  const _cats=[...new Set(itens.map(it=>it.c||'Outros'))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
+  const _thSt='padding:9px 12px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--txt2)'
+  const _catRows=_cats.flatMap(cat=>[
+    `<tr><td colspan="3" style="background:var(--cream2);color:var(--txt2);padding:7px 12px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:5px solid #fff">${cat}</td></tr>`,
+    ...itens.filter(it=>(it.c||'Outros')===cat).map(it=>`<tr style="border-bottom:1px solid var(--cream2)"><td style="padding:10px 12px">${it.n||''}</td><td style="padding:10px 12px;text-align:center">${it.q}</td><td style="padding:10px 12px;text-align:right;font-weight:600">${fmt(it.s)}</td></tr>`)
+  ]).join('')
+  const _logoEl=document.querySelector('.slogo img')
+  const _logoHtml=_logoEl?`<img src="${_logoEl.src}" style="max-height:75px;max-width:90px;object-fit:contain;display:block" alt="Logo">`:'';
   const ov=document.getElementById('clientViewOverlay')
   ov.style.display='block'
   document.getElementById('sidebar').style.display='none'
   document.querySelector('.main').style.display='none'
   ov.innerHTML=`
-  <div style="max-width:680px;margin:0 auto;padding:32px 20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:3px solid var(--cara);padding-bottom:16px;margin-bottom:24px">
-      <div>
-        ${(()=>{const ls=document.querySelector('.slogo img');return ls?`<img src="${ls.src}" style="max-height:70px;max-width:160px;object-fit:contain;display:block;margin-bottom:4px" alt="Logo">`:`<div style="font-family:'Palatino Linotype',serif;font-size:20px;color:var(--choc);font-weight:bold">${nome}</div>`})()}
-        <div style="font-size:12px;color:var(--txt3)">${[ef,ee].filter(Boolean).join(' · ')}</div>
+  <div style="max-width:700px;margin:0 auto;padding:32px 20px;font-family:'Trebuchet MS',sans-serif">
+    <!-- Cabeçalho empresa -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:20px;padding:0 0 20px;border-bottom:2px solid var(--cara2);margin-bottom:24px">
+      <div style="display:flex;align-items:center;gap:16px">
+        ${_logoHtml}
+        <div>
+          <div style="font-family:'Palatino Linotype',serif;font-size:19px;font-weight:bold;color:var(--choc);line-height:1.2;margin-bottom:2px">${nome}</div>
+          ${er?`<div style="font-size:10px;color:#B8912A;font-weight:700;letter-spacing:.6px;text-transform:uppercase;margin-bottom:5px">${er}</div>`:''}
+          <div style="font-size:11px;color:var(--txt2);line-height:1.9">${[ea,ef,ee].filter(Boolean).join('<br>')}</div>
+        </div>
       </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;color:var(--txt3);text-transform:uppercase;letter-spacing:1px">Orçamento</div>
-        <div style="font-family:'Palatino Linotype',serif;font-size:24px;color:var(--cara)">#${oid}</div>
-        <div style="font-size:12px;color:var(--txt3)">Válido até ${fmtDate(validade)}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:8.5px;letter-spacing:1.8px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:4px">Proposta Comercial</div>
+        <div style="font-family:'Palatino Linotype',serif;font-size:22px;font-weight:bold;color:var(--choc)">ORÇAMENTO&nbsp;<span style="color:#B8912A">#${oid}</span></div>
+        <div style="font-size:11px;color:var(--txt3);margin-top:4px">Válido até ${fmtDate(validade)}</div>
       </div>
     </div>
-    <div style="background:var(--cream);border-radius:10px;padding:14px 18px;margin-bottom:20px">
-      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--txt3);margin-bottom:6px">Para</div>
-      <div style="font-size:15px;font-weight:700">${clinome||'Cliente'}</div>
-      ${clifone?`<div style="font-size:13px;color:var(--txt3)">${clifone}</div>`:''}
+    <!-- Cliente -->
+    <div style="margin-bottom:18px;padding:12px 16px;background:var(--cream);border-radius:6px">
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:6px">Cliente</div>
+      <div style="font-size:15px;font-weight:700;color:var(--choc)">${clinome||'Cliente'}</div>
+      ${clifone?`<div style="font-size:12px;color:var(--txt2);margin-top:2px">${clifone}</div>`:''}
     </div>
+    <!-- Itens por categoria -->
     <div style="overflow-x:auto;margin-bottom:16px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:var(--cream2)">
-          <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2)">Produto / Descrição</th>
-          <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2)">Qtd</th>
-          <th style="padding:9px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--txt2)">Valor</th>
+        <thead><tr style="background:var(--choc)">
+          <th style="${_thSt};text-align:left;color:#fff">Produto / Descrição</th>
+          <th style="${_thSt};text-align:center;color:#fff">Qtd</th>
+          <th style="${_thSt};text-align:right;color:#fff">Valor</th>
         </tr></thead>
         <tbody>
-          ${itens.map(it=>`<tr style="border-bottom:1px solid var(--cream2)"><td style="padding:10px 12px">${it.n||''}</td><td style="padding:10px 12px;text-align:center">${it.q}</td><td style="padding:10px 12px;text-align:right;font-weight:600">${fmt(it.s)}</td></tr>`).join('')}
+          ${_catRows}
           <tr style="background:var(--cream2)"><td style="padding:8px 12px;font-size:12px;color:var(--txt2);font-weight:600">Total de itens</td><td style="padding:8px 12px;text-align:center;font-weight:700;color:var(--choc)">${itens.reduce((a,x)=>a+(parseFloat(x.q)||0),0)}</td><td></td></tr>
         </tbody>
       </table>
     </div>
-    <div style="margin-left:auto;width:240px;background:var(--cream);border-radius:8px;padding:12px 16px;margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--txt2)"><span>Subtotal</span><span>${fmt(total)}</span></div>
+    <!-- Totais -->
+    <div style="margin-left:auto;width:260px;background:var(--cream);border-radius:8px;padding:12px 16px;margin-bottom:20px">
+      ${total&&desc>0?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--txt2)"><span>Subtotal</span><span>${fmt(total)}</span></div>`:''}
       ${desc>0?`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:var(--bad)"><span>Desconto</span><span>- ${fmt(desc)}</span></div>`:''}
       <div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;color:var(--choc);border-top:1px solid var(--cream2);margin-top:6px;padding-top:8px"><span>TOTAL</span><span>${fmt(totalF)}</span></div>
     </div>
-    ${obs?`<div style="font-size:13px;color:var(--txt2);margin-bottom:20px;padding:12px;background:var(--cream);border-radius:8px">${obs}</div>`:''}
+    ${obs?`<div style="font-size:13px;color:var(--txt2);margin-bottom:20px;padding:12px 16px;background:var(--cream);border-radius:6px;border-left:3px solid var(--cara2)">${obs}</div>`:''}
+    <!-- Botões de aprovação -->
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">
-      ${ew?`<a href="https://wa.me/${ew.replace(/\D/g,'')}?text=${encodeURIComponent('Olá, aprovo o orçamento #'+oid+' no valor de '+fmt(totalF)+'!')}" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:#25D366;color:#fff;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;min-width:180px">
-        <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-        Aprovar via WhatsApp</a>`:''}
-      <a href="mailto:${ee}?subject=Aprovação Orçamento %23${oid}&body=Olá, aprovo o orçamento no valor de ${fmt(totalF)}." style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--cara);color:#fff;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;min-width:180px">
-        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="currentColor" stroke-width="2"/></svg>
-        Aprovar via E-mail</a>
+      ${ew?`<a href="https://wa.me/${ew.replace(/\D/g,'')}?text=${encodeURIComponent('Olá, aprovo o orçamento #'+oid+' no valor de '+fmt(totalF)+'!')}" target="_blank" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:#25D366;color:#fff;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;min-width:180px"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>Aprovar via WhatsApp</a>`:''}
+      ${ee?`<a href="mailto:${ee}?subject=Aprovação Orçamento %23${oid}&body=Olá, aprovo o orçamento no valor de ${fmt(totalF)}." style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:var(--cara);color:#fff;border-radius:10px;font-size:15px;font-weight:700;text-decoration:none;min-width:180px"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="currentColor" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="currentColor" stroke-width="2"/></svg>Aprovar via E-mail</a>`:''}
     </div>
-    <div style="margin-top:16px;text-align:center;font-size:12px;color:var(--txt3)">Powered by DoceSistema</div>
+    <div style="margin-top:20px;text-align:center;font-size:11px;color:var(--txt3)">Powered by DoceSistema</div>
   </div>`
 }
 
