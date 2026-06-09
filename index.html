@@ -3898,23 +3898,22 @@ function docHead(titulo){
   return`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${titulo}</title>
   <style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:'Trebuchet MS',sans-serif;color:#1C1A18;background:#fff;padding:28px}
   .doc{max-width:800px;margin:0 auto}
-  .cab{display:flex;align-items:stretch;border:1px solid #DDD5C8;border-radius:6px;margin-bottom:22px;overflow:hidden}
-  .cab-logo{display:flex;align-items:center;justify-content:center;padding:14px 16px;border-right:1px solid #DDD5C8;min-width:110px;background:#FAF6F1}
-  .cab-logo img{max-height:80px;max-width:100px;object-fit:contain}
-  .cab-logo-txt{font-family:'Palatino Linotype',serif;font-size:15px;font-weight:bold;color:#3D3028;text-align:center}
-  .cab-info{flex:1;padding:12px 16px;border-right:1px solid #DDD5C8}
-  .cab-nome{font-family:'Palatino Linotype',serif;font-size:16px;font-weight:bold;color:#3D3028;margin-bottom:3px}
-  .cab-razao{font-size:11px;color:#9A8E82;margin-bottom:4px}
-  .cab-det{font-size:11px;color:#6A5E52;line-height:1.9}
-  .cab-contato{padding:12px 16px;text-align:right;font-size:11px;color:#6A5E52;line-height:2;min-width:200px;display:flex;flex-direction:column;justify-content:center}
+  .cab{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:18px 0 20px;border-bottom:2px solid #C4B09A;margin-bottom:24px}
+  .cab-left{display:flex;align-items:center;gap:18px}
+  .cab-logo img{max-height:80px;max-width:96px;object-fit:contain;display:block}
+  .cab-logo-txt{font-family:'Palatino Linotype',serif;font-size:22px;font-weight:bold;color:#3D3028}
+  .cab-nome{font-family:'Palatino Linotype',serif;font-size:19px;font-weight:bold;color:#3D3028;margin-bottom:2px;line-height:1.2}
+  .cab-razao{font-size:11px;color:#B8912A;margin-bottom:6px;font-weight:600;letter-spacing:.5px;text-transform:uppercase}
+  .cab-det{font-size:11px;color:#7A6E62;line-height:1.9}
+  .cab-contato{text-align:right;font-size:11.5px;color:#5A4A3A;line-height:2.1;flex-shrink:0}
   .doc-title{background:#B8912A;color:#fff;text-align:center;padding:7px 0;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:18px;border-radius:4px}
   .doc-num{font-family:'Palatino Linotype',serif;font-size:28px;color:#B8912A;text-align:right}
   .section{margin:18px 0}
   .cli-table-wrap{border:1px solid #DDD5C8;overflow:hidden;margin-bottom:14px}
-  .cli-table-title{background:#C4B09A;color:#fff;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:6px 12px}
+  .cli-table-title{font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px;padding:0}
   .cli-table{width:100%;border-collapse:collapse;font-size:12px}
-  .cli-table th{background:#F5F0EA;color:#6A5E52;font-weight:700;padding:6px 10px;white-space:nowrap;width:110px;border:1px solid #DDD5C8}
-  .cli-table td{padding:6px 10px;border:1px solid #DDD5C8;color:#3D3028}
+  .cli-table th{color:#9A8E82;font-weight:600;padding:4px 0;white-space:nowrap;width:100px;vertical-align:top;font-size:11px}
+  .cli-table td{padding:4px 8px 4px 0;color:#3D3028;border-bottom:1px solid #F0EBE4}
   .doc-title-row{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1.5px solid #C4B09A;padding:12px 0 8px;margin-bottom:6px}
   .doc-title-num{font-family:'Palatino Linotype',serif;font-size:20px;font-weight:bold;color:#3D3028;text-transform:uppercase;letter-spacing:.5px}
   .doc-title-date{font-size:13px;color:#6A5E52;font-weight:600}
@@ -3939,17 +3938,19 @@ function docHead(titulo){
   }</style>
   </head><body><div class="doc">
   <div class="cab">
-    <div class="cab-logo">${logoSrc?`<img src="${logoSrc}" alt="Logo">`:`<div class="cab-logo-txt">${nome}</div>`}</div>
-    <div class="cab-info">
-      <div class="cab-nome">${nome}</div>
-      ${razao?`<div class="cab-razao">${razao}</div>`:''}
-      <div class="cab-det">
-        ${e.cnpj?`CNPJ: <strong>${e.cnpj}</strong>${e.ie?' &nbsp;|&nbsp; IE: '+e.ie:''}<br>`:''}
-        ${end1?end1+'<br>':''}
-        ${end2?end2+'<br>':''}
+    <div class="cab-left">
+      ${logoSrc?`<div class="cab-logo"><img src="${logoSrc}" alt="Logo"></div>`:''}
+      <div>
+        <div class="cab-nome">${nome}</div>
+        ${razao?`<div class="cab-razao">${razao}</div>`:''}
+        <div class="cab-det">
+          ${e.cnpj?`CNPJ: <strong>${e.cnpj}</strong>${e.ie?' &nbsp;|&nbsp; IE: '+e.ie:''}<br>`:''}
+          ${end1?end1+'<br>':''}
+          ${end2||''}
+        </div>
       </div>
     </div>
-    <div class="cab-contato">${contatos.map(c=>`<span>${c}</span>`).join('')}</div>
+    <div class="cab-contato">${contatos.map(c=>`<div>${c}</div>`).join('')}</div>
   </div>`
 }
 function noivosBlock(noivos){
@@ -3963,7 +3964,7 @@ function cliBlock(cli){
   if(cli.end)rows.push(`<tr><th>Endereço:</th><td colspan="3">${cli.end}</td></tr>`)
   if(cli.cep||cli.cidade)rows.push(`<tr><th>Cep:</th><td>${cli.cep||'—'}</td><th>Cidade:</th><td>${cli.cidade||'—'}</td></tr>`)
   if(cli.obs)rows.push(`<tr><th>Observação:</th><td colspan="3">${cli.obs}</td></tr>`)
-  return`<div class="section"><div class="cli-table-wrap"><div class="cli-table-title">Dados do Cliente</div><table class="cli-table">${rows.join('')}</table></div></div>`
+  return`<div class="section" style="margin-bottom:16px"><div class="cli-table-title">Cliente</div><table class="cli-table">${rows.join('')}</table></div>`
 }
 function docFoot(obs,assinatura){
   const e=getEmpresa()
