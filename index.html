@@ -693,6 +693,7 @@ function novaVenda(){
     <div class="frow">
       <div class="fg"><label>Data do Evento</label><input type="date" id="vDataEvento"></div>
       <div class="fg"><label>Data da Entrega</label><input type="date" id="vDataEntrega"></div>
+      <div class="fg"><label>Horário de Entrega</label><input type="time" id="vHoraEntrega"></div>
     </div>
     <div class="fg"><label>Modalidade</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -767,6 +768,7 @@ function editVenda(id){
     <div class="frow">
       <div class="fg"><label>Data do Evento</label><input type="date" id="vDataEvento" value="${v.dataEvento||''}"></div>
       <div class="fg"><label>Data da Entrega</label><input type="date" id="vDataEntrega" value="${v.dataEntrega||''}"></div>
+      <div class="fg"><label>Horário de Entrega</label><input type="time" id="vHoraEntrega" value="${v.horaEntrega||''}"></div>
     </div>
     <div class="fg"><label>Modalidade</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -802,6 +804,7 @@ function salvarVenda(){
   const noivos=v('vNoivos')
   const dataEvento=(document.getElementById('vDataEvento')||{}).value||undefined
   const dataEntrega=(document.getElementById('vDataEntrega')||{}).value||undefined
+  const horaEntrega=(document.getElementById('vHoraEntrega')||{}).value||undefined
   const entregaSel=document.querySelector('input[name="vEntrega"]:checked')
   const entrega=entregaSel?entregaSel.value:'retira'
   const endEntrega=entrega==='entrega'?v('vEndEntrega')||undefined:undefined
@@ -815,7 +818,7 @@ function salvarVenda(){
     if(old)descontarEstoque(old.itens,+1)
     descontarEstoque(itens,-1)
     const idx=vendas.findIndex(x=>x.id===editId)
-    if(idx>=0)vendas[idx]={id:editId,cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
+    if(idx>=0)vendas[idx]={id:editId,cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
     DB.set(S.VENDAS,vendas)
     const ti=trans.findIndex(x=>x.ref===editId)
     if(ti>=0){trans[ti]={...trans[ti],val:totalF,data,pgto,desc:`Venda - ${clienteNome(cliId)}`};DB.set(S.TRANS,trans)}
@@ -823,7 +826,7 @@ function salvarVenda(){
     closeModal();toast('Venda atualizada!','ok')
   }else{
     descontarEstoque(itens,-1)
-    const venda={id:genId(),cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
+    const venda={id:genId(),cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
     vendas.push(venda);DB.set(S.VENDAS,vendas)
     trans.push({id:genId(),tipo:'entrada',cat:'Venda',desc:`Venda - ${clienteNome(cliId)}`,val:totalF,data,pgto,ref:venda.id})
     DB.set(S.TRANS,trans)
@@ -851,7 +854,7 @@ function verVenda(id){
     </div>
     ${(v.dataEvento||v.dataEntrega||v.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${v.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(v.dataEvento)}</span>`:''}
-      ${v.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(v.dataEntrega)}</span>`:''}
+      ${v.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(v.dataEntrega)}${v.horaEntrega?' às '+v.horaEntrega:''}</span>`:''}
       ${v.entrega?`<span><strong style="color:var(--txt2)">Modalidade:</strong> ${v.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</span>`:''}
       ${v.endEntrega?`<span style="width:100%"><strong style="color:var(--txt2)">Endereço:</strong> ${v.endEntrega}</span>`:''}
     </div>`:''}
@@ -960,6 +963,7 @@ function novoOrc(){
     <div class="frow">
       <div class="fg"><label>Data do Evento</label><input type="date" id="oDataEvento"></div>
       <div class="fg"><label>Data da Entrega</label><input type="date" id="oDataEntrega"></div>
+      <div class="fg"><label>Horário de Entrega</label><input type="time" id="oHoraEntrega"></div>
     </div>
     <div class="fg"><label>Modalidade</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1032,6 +1036,7 @@ function editOrc(id){
     <div class="frow">
       <div class="fg"><label>Data do Evento</label><input type="date" id="oDataEvento" value="${o.dataEvento||''}"></div>
       <div class="fg"><label>Data da Entrega</label><input type="date" id="oDataEntrega" value="${o.dataEntrega||''}"></div>
+      <div class="fg"><label>Horário de Entrega</label><input type="time" id="oHoraEntrega" value="${o.horaEntrega||''}"></div>
     </div>
     <div class="fg"><label>Modalidade</label>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1059,16 +1064,17 @@ function salvarOrc(){
   const total=itens.reduce((a,x)=>a+x.sub,0);const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
   const dataEvento=(document.getElementById('oDataEvento')||{}).value||undefined
   const dataEntrega=(document.getElementById('oDataEntrega')||{}).value||undefined
+  const horaEntrega=(document.getElementById('oHoraEntrega')||{}).value||undefined
   const entregaSel=document.querySelector('input[name="oEntrega"]:checked')
   const entrega=entregaSel?entregaSel.value:'retira'
   const endEntrega=entrega==='entrega'?v('oEndEntrega')||undefined:undefined
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,noivos:v('oNoivos'),dataEvento,dataEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',noivos:v('oNoivos'),dataEvento,dataEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento salvo!','ok')
   }
   render('orcamentos')
@@ -1158,7 +1164,7 @@ function verOrc(id){
     </div>
     ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
-      ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}</span>`:''}
+      ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
       ${o.entrega?`<span><strong style="color:var(--txt2)">Modalidade:</strong> ${o.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</span>`:''}
       ${o.endEntrega?`<span style="width:100%"><strong style="color:var(--txt2)">Endereço:</strong> ${o.endEntrega}</span>`:''}
     </div>`:''}
@@ -3971,7 +3977,7 @@ function imprimirOrc(id){
       <span>VALIDADE: ${fmtDate(o.validade)}</span>
       ${o.noivos?`<span>EVENTO: ${o.noivos}</span>`:''}
       ${o.dataEvento?`<span>DATA DO EVENTO: ${fmtDate(o.dataEvento)}</span>`:''}
-      ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}</span>`:''}
+      ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
       ${o.entrega?`<span>MODALIDADE: ${o.entrega==='entrega'?'LABERNA DULCE ENTREGA':'CLIENTE RETIRA'}</span>`:''}
     </div>
     ${o.endEntrega?`<div style="margin:0 0 14px;padding:10px 14px;background:#FDF8EE;border-left:4px solid #B8912A;border-radius:0 6px 6px 0;font-size:13px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E;display:block;margin-bottom:3px">Endereço de Entrega</span><strong style="color:#1C1A18">${o.endEntrega}</strong></div>`:''}
