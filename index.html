@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>DoceSistema — Gestão de Confeitaria</title>
+<script src="https://js.puter.com/v2/"></script>
 <style>
 :root{--choc:#1C1A18;--choc2:#2A2724;--choc3:#3A3632;--cara:#B8912A;--cara2:#D4AD50;--cream:#F8F7F4;--cream2:#EDEBE6;--ivory:#FDFCFA;--txt:#1C1A18;--txt2:#52493E;--txt3:#8A7E6E;--white:#FFFFFF;--ok:#3D8A5E;--warn:#C4724A;--bad:#B84040;--sw:260px;--hh:64px;--r:12px;--sh:0 2px 16px rgba(28,26,24,.09);--shm:0 4px 28px rgba(28,26,24,.16)}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -270,6 +271,7 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
       Minha Empresa
     </div>
   </nav>
+  <div id="puterPanel" style="border-top:1px solid rgba(255,255,255,.07);padding:10px 12px 6px"></div>
   <div class="sfooter">DoceSistema v1.0 · 2025</div>
 </aside>
 
@@ -4291,7 +4293,114 @@ function init(){
   renderSlogoInfo()
   checkClientView()
   if(!location.hash.startsWith('#orcview='))render('dashboard')
+  initPuterSync()
 }
+
+// ===== SYNC NUVEM (Puter.js) =====
+const SYNC_FILE='DoceSistema/dados.json'
+const SYNC_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_init']
+let _syncTimer=null
+let _syncBusy=false
+
+function _setSyncUI(icon,msg,cor){
+  const el=document.getElementById('syncMsg');if(el)el.innerHTML=`<span style="color:${cor}">${icon} ${msg}</span>`
+}
+
+function renderPuterPanel(){
+  const el=document.getElementById('puterPanel');if(!el)return
+  const ok=typeof puter!=='undefined'&&puter.auth.isSignedIn()
+  if(ok){
+    el.innerHTML=`
+    <div style="font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.28);margin-bottom:6px">Sincronização</div>
+    <div id="syncMsg" style="font-size:11px;margin-bottom:8px;color:rgba(255,255,255,.5)">☁ Conectado</div>
+    <button onclick="syncAgora()" style="width:100%;padding:6px 8px;background:rgba(255,255,255,.08);color:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.12);border-radius:7px;font-size:11.5px;cursor:pointer;font-family:inherit;margin-bottom:5px;text-align:left">↑ Sincronizar agora</button>
+    <button onclick="puterSair()" style="width:100%;padding:5px 8px;background:transparent;color:rgba(255,255,255,.35);border:1px solid rgba(255,255,255,.08);border-radius:7px;font-size:11px;cursor:pointer;font-family:inherit;text-align:left">Sair da conta</button>`
+  }else{
+    el.innerHTML=`
+    <div style="font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:rgba(255,255,255,.28);margin-bottom:5px">Sincronização entre dispositivos</div>
+    <p style="font-size:11px;color:rgba(255,255,255,.38);margin-bottom:8px;line-height:1.5">Entre para acessar seus dados em qualquer computador ou celular.</p>
+    <button onclick="puterEntrar()" style="width:100%;padding:7px 8px;background:var(--cara);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">☁ Entrar e Sincronizar</button>`
+  }
+}
+
+async function initPuterSync(){
+  if(typeof puter==='undefined')return
+  renderPuterPanel()
+  if(puter.auth.isSignedIn())await carregarDaNuvem(false)
+}
+
+async function puterEntrar(){
+  try{
+    await puter.auth.signIn()
+    renderPuterPanel()
+    const carregou=await carregarDaNuvem(true)
+    if(carregou){render(document.querySelector('.ni.active')?.dataset.page||'dashboard')}
+    toast('Conectado! Dados sincronizados.','ok')
+  }catch(e){toast('Não foi possível conectar.','err')}
+}
+
+async function puterSair(){
+  if(!confirm('Sair da sincronização? Seus dados locais são mantidos.'))return
+  await puter.auth.signOut()
+  renderPuterPanel()
+  toast('Sessão encerrada.','ok')
+}
+
+async function carregarDaNuvem(forcar){
+  if(typeof puter==='undefined'||!puter.auth.isSignedIn())return false
+  _setSyncUI('↻','Carregando da nuvem...','var(--cara2)')
+  try{
+    const file=await puter.fs.read(SYNC_FILE)
+    const txt=await file.text()
+    const dados=JSON.parse(txt)
+    const tsNuvem=dados._ts||0
+    const tsLocal=parseInt(localStorage.getItem('ds_sync_ts')||'0')
+    if(forcar||tsNuvem>tsLocal){
+      SYNC_KEYS.forEach(k=>{if(dados[k]!=null)localStorage.setItem(k,dados[k])})
+      localStorage.setItem('ds_sync_ts',String(tsNuvem))
+      _setSyncUI('☑','Dados atualizados','var(--ok)')
+      return true
+    }else{
+      _setSyncUI('☁','Local mais recente — enviando...','rgba(255,255,255,.5)')
+      await enviarParaNuvem()
+      return false
+    }
+  }catch(e){
+    const msg=e?.message||''
+    if(msg.includes('not found')||msg.includes('ENOENT')||msg.includes('404')){
+      await enviarParaNuvem()
+      return false
+    }
+    _setSyncUI('⚠','Erro ao carregar','var(--bad)')
+    return false
+  }
+}
+
+async function enviarParaNuvem(){
+  if(typeof puter==='undefined'||!puter.auth.isSignedIn()||_syncBusy)return
+  _syncBusy=true
+  _setSyncUI('↻','Sincronizando...','var(--cara2)')
+  try{
+    const dados={_ts:Date.now()}
+    SYNC_KEYS.forEach(k=>{dados[k]=localStorage.getItem(k)})
+    await puter.fs.write(SYNC_FILE,JSON.stringify(dados),{createMissingParents:true})
+    localStorage.setItem('ds_sync_ts',String(dados._ts))
+    _setSyncUI('☑','Sincronizado','var(--ok)')
+  }catch(e){
+    _setSyncUI('⚠','Erro de sync','var(--bad)')
+  }finally{_syncBusy=false}
+}
+
+function syncAgora(){enviarParaNuvem()}
+
+function agendarSync(){
+  clearTimeout(_syncTimer)
+  _syncTimer=setTimeout(enviarParaNuvem,2500)
+}
+
+// Interceptar DB.set para disparar sync automático
+const _dbSetOriginal=DB.set
+DB.set=(k,v)=>{_dbSetOriginal(k,v);agendarSync()}
 
 window.addEventListener('DOMContentLoaded',init)
 </script>
