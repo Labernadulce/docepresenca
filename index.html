@@ -3992,9 +3992,17 @@ function imprimirOrc(id){
   ]).join('')
   const w=window.open('','_blank','width=900,height=700')
   w.document.write(docHead('ORÇAMENTO')+
-    `<div class="doc-title-row">
-      <div class="doc-title-num">ORÇAMENTO Nº #${id.slice(-4).toUpperCase()}</div>
-      <div class="doc-title-date">${fmtDate(o.data)}</div>
+    `<div style="display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0 14px;border-bottom:2px solid #C4B09A;margin-bottom:16px">
+      <div>
+        <div style="font-size:9px;letter-spacing:2.5px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:6px">Proposta Comercial</div>
+        <div style="font-family:'Palatino Linotype',serif;font-size:28px;font-weight:bold;color:#3D3028;letter-spacing:.5px;line-height:1">
+          ORÇAMENTO&nbsp;&nbsp;<span style="color:#B8912A;font-size:32px">#${id.slice(-4).toUpperCase()}</span>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;letter-spacing:1.5px;color:#9A8E82;text-transform:uppercase;margin-bottom:4px">Data</div>
+        <div style="font-size:15px;color:#5A4A3A;font-weight:700;font-family:'Palatino Linotype',serif">${fmtDate(o.data)}</div>
+      </div>
     </div>
     <p class="doc-msg">Por favor verifique todas as informações antes de assinar o orçamento.</p>
     <div class="info-bar">
