@@ -3970,7 +3970,11 @@ function imprimirOrc(id){
     <div class="info-bar">
       <span>VALIDADE: ${fmtDate(o.validade)}</span>
       ${o.noivos?`<span>EVENTO: ${o.noivos}</span>`:''}
+      ${o.dataEvento?`<span>DATA DO EVENTO: ${fmtDate(o.dataEvento)}</span>`:''}
+      ${o.dataEntrega?`<span>DATA DA ENTREGA: ${fmtDate(o.dataEntrega)}</span>`:''}
+      ${o.entrega?`<span>MODALIDADE: ${o.entrega==='entrega'?'LABERNA DULCE ENTREGA':'CLIENTE RETIRA'}</span>`:''}
     </div>
+    ${o.endEntrega?`<div style="margin:0 0 14px;padding:10px 14px;background:#FDF8EE;border-left:4px solid #B8912A;border-radius:0 6px 6px 0;font-size:13px"><span style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E;display:block;margin-bottom:3px">Endereço de Entrega</span><strong style="color:#1C1A18">${o.endEntrega}</strong></div>`:''}
     ${cliBlock(cli)}
     <div class="prod-hdr">PRODUTOS</div>
     <table class="prod-table">
