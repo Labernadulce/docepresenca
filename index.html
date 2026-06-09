@@ -690,6 +690,17 @@ function novaVenda(){
     <div style="margin-top:12px" id="vTotals"></div>
     <div class="fg" style="margin-top:10px"><label>Desconto (R$)</label><input type="number" id="vDesc" value="0" min="0" oninput="calcVendaTotals()"></div>
     <div class="fg"><label>Nome dos Noivos / Evento</label><input id="vNoivos" placeholder="Ex: Ana &amp; Carlos — Casamento 15/06"></div>
+    <div class="frow">
+      <div class="fg"><label>Data do Evento</label><input type="date" id="vDataEvento"></div>
+      <div class="fg"><label>Data da Entrega</label><input type="date" id="vDataEntrega"></div>
+    </div>
+    <div class="fg"><label>Modalidade</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="vEntrega" value="retira" checked onchange="toggleEndEntrega()"> Cliente Retira</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="vEntrega" value="entrega" onchange="toggleEndEntrega()"> Laberna Dulce Entrega</label>
+      </div>
+    </div>
+    <div class="fg" id="vEndEntregaGrp" style="display:none"><label>Endereço de Entrega</label><input id="vEndEntrega" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg"><label>Observações</label><textarea id="vObs" placeholder="Observações..."></textarea></div>
     ${anexoWidget(null,'Comprovante de Pagamento')}`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarVenda()">Salvar Venda</button>`,true)
@@ -753,10 +764,27 @@ function editVenda(id){
     <div style="margin-top:12px" id="vTotals"></div>
     <div class="fg" style="margin-top:10px"><label>Desconto (R$)</label><input type="number" id="vDesc" value="${v.desc||0}" min="0" oninput="calcVendaTotals()"></div>
     <div class="fg"><label>Nome dos Noivos / Evento</label><input id="vNoivos" value="${v.noivos||''}" placeholder="Ex: Ana &amp; Carlos — Casamento 15/06"></div>
+    <div class="frow">
+      <div class="fg"><label>Data do Evento</label><input type="date" id="vDataEvento" value="${v.dataEvento||''}"></div>
+      <div class="fg"><label>Data da Entrega</label><input type="date" id="vDataEntrega" value="${v.dataEntrega||''}"></div>
+    </div>
+    <div class="fg"><label>Modalidade</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="vEntrega" value="retira" ${!v.entrega||v.entrega==='retira'?'checked':''} onchange="toggleEndEntrega()"> Cliente Retira</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;flex:1;justify-content:center;background:var(--ivory)"><input type="radio" name="vEntrega" value="entrega" ${v.entrega==='entrega'?'checked':''} onchange="toggleEndEntrega()"> Laberna Dulce Entrega</label>
+      </div>
+    </div>
+    <div class="fg" id="vEndEntregaGrp" style="display:${v.entrega==='entrega'?'block':'none'}"><label>Endereço de Entrega</label><input id="vEndEntrega" value="${v.endEntrega||''}" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg"><label>Observações</label><textarea id="vObs" placeholder="Observações...">${v.obs||''}</textarea></div>
     ${anexoWidget(v.comprovante||null,'Comprovante de Pagamento')}`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarVenda()">Atualizar Venda</button>`,true)
   renderVItens(prods);calcVendaTotals()
+}
+
+function toggleEndEntrega(){
+  const sel=document.querySelector('input[name="vEntrega"]:checked')
+  const grp=document.getElementById('vEndEntregaGrp')
+  if(grp)grp.style.display=sel&&sel.value==='entrega'?'block':'none'
 }
 
 function salvarVenda(){
@@ -772,6 +800,11 @@ function salvarVenda(){
   const status=(document.getElementById('vStatus')||{}).value
   const obs=(document.getElementById('vObs')||{}).value
   const noivos=v('vNoivos')
+  const dataEvento=(document.getElementById('vDataEvento')||{}).value||undefined
+  const dataEntrega=(document.getElementById('vDataEntrega')||{}).value||undefined
+  const entregaSel=document.querySelector('input[name="vEntrega"]:checked')
+  const entrega=entregaSel?entregaSel.value:'retira'
+  const endEntrega=entrega==='entrega'?v('vEndEntrega')||undefined:undefined
   const vendas=DB.get(S.VENDAS);const trans=DB.get(S.TRANS)
   const prods=DB.get(S.PRODUTOS)
   function descontarEstoque(itensList,sinal){
@@ -782,7 +815,7 @@ function salvarVenda(){
     if(old)descontarEstoque(old.itens,+1)
     descontarEstoque(itens,-1)
     const idx=vendas.findIndex(x=>x.id===editId)
-    if(idx>=0)vendas[idx]={id:editId,cliId,data,itens,total,desc,totalF,pgto,status,noivos,obs,comprovante:tempAnexo}
+    if(idx>=0)vendas[idx]={id:editId,cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
     DB.set(S.VENDAS,vendas)
     const ti=trans.findIndex(x=>x.ref===editId)
     if(ti>=0){trans[ti]={...trans[ti],val:totalF,data,pgto,desc:`Venda - ${clienteNome(cliId)}`};DB.set(S.TRANS,trans)}
@@ -790,7 +823,7 @@ function salvarVenda(){
     closeModal();toast('Venda atualizada!','ok')
   }else{
     descontarEstoque(itens,-1)
-    const venda={id:genId(),cliId,data,itens,total,desc,totalF,pgto,status,noivos,obs,comprovante:tempAnexo}
+    const venda={id:genId(),cliId,data,itens,total,desc,totalF,pgto,status,noivos,dataEvento,dataEntrega,entrega,endEntrega,obs,comprovante:tempAnexo}
     vendas.push(venda);DB.set(S.VENDAS,vendas)
     trans.push({id:genId(),tipo:'entrada',cat:'Venda',desc:`Venda - ${clienteNome(cliId)}`,val:totalF,data,pgto,ref:venda.id})
     DB.set(S.TRANS,trans)
@@ -816,6 +849,12 @@ function verVenda(id){
       ${v.desc>0?`<div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(v.desc)}</span></div>`:''}
       <div class="trow bold"><span>Total</span><span>${fmt(v.totalF)}</span></div>
     </div>
+    ${(v.dataEvento||v.dataEntrega||v.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
+      ${v.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(v.dataEvento)}</span>`:''}
+      ${v.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(v.dataEntrega)}</span>`:''}
+      ${v.entrega?`<span><strong style="color:var(--txt2)">Modalidade:</strong> ${v.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</span>`:''}
+      ${v.endEntrega?`<span style="width:100%"><strong style="color:var(--txt2)">Endereço:</strong> ${v.endEntrega}</span>`:''}
+    </div>`:''}
     ${v.obs?`<div style="margin-top:10px;font-size:13px;color:var(--txt3)">Obs: ${v.obs}</div>`:''}
     ${cmp?`<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--cream2)">
       <div style="font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Comprovante de Pagamento</div>
