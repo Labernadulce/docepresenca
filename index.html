@@ -5023,11 +5023,9 @@ function showRomaneioClientView(raw){
           else if(seqData.retiradas)allRet.push(...seqData.retiradas)
           seq++
         }
-        // Se houve cancelamento geral, considera apenas retiradas feitas depois dele
-        const retiradasPosCancel=cancelTime?allRet.filter(r=>r.data&&r.data>cancelTime):allRet
-        // Filtra também retiradas individualmente anuladas (romci docs)
-        const cancelledIdxs=await _getRomCancelados(orcId,retiradasPosCancel.length)
-        const retiradas=retiradasPosCancel.filter((_,i)=>!cancelledIdxs.has(i+1))
+        // Filtra usando posições absolutas (índice em allRet), evitando desalinhamento
+        const cancelledIdxs=await _getRomCancelados(orcId,allRet.length)
+        const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
         if(!retiradas.length){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
         const jaRetirados=new Set(retiradas.flatMap(r=>r.itens||[]))
         _romItensJaRetirados=jaRetirados
