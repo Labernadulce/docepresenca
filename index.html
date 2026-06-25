@@ -4472,16 +4472,18 @@ function renderRomTable(){
   </tr>`).join('')}
   </tbody></table>`
 }
-function verRomaneioItens(id){
+async function verRomaneioItens(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const prods=DB.get(S.PRODUTOS)
   const getNome=it=>{if(!it.pId||it.pId==='_custom')return it.nome||'';const p=prods.find(x=>x.id===it.pId);return p?p.nome:(it.nome||'')}
+  const footer=`<button class="btn btn-s" onclick="closeModal()">Fechar</button>
+     <button class="btn btn-sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="closeModal();gerarLinkRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar Link</button>
+     <button class="btn btn-p btn-sm" onclick="closeModal();imprimirRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Imprimir</button>`
   const infoHtml=`<div style="display:flex;flex-wrap:wrap;gap:6px 20px;margin-bottom:14px;font-size:13px;padding:10px 14px;background:var(--cream2);border-radius:8px">
     <span><strong>Cliente:</strong> ${clienteNome(o.cliId)}</span>
     ${o.dataEntrega?`<span><strong>Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
     ${o.entrega?`<span><strong>Modalidade:</strong> ${o.entrega==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</span>`:''}
     ${o.endEntrega?`<span><strong>Endereço:</strong> ${o.endEntrega}</span>`:''}
-    ${o.romAssinatura?`<span style="color:#2E7D32"><strong>✍️ Retirado por:</strong> ${o.romAssinatura.nome}${o.romAssinatura.dataFmt?' em '+o.romAssinatura.dataFmt:''}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª retirada)':''}</span>`:''}
   </div>`
   const tblHtml=`<div class="tc"><table style="margin:0"><thead><tr><th style="width:36px">#</th><th>Produto / Descrição</th><th style="text-align:center">Qtd</th></tr></thead><tbody>
     ${(o.itens||[]).map((it,i)=>`<tr>
@@ -4490,10 +4492,32 @@ function verRomaneioItens(id){
       <td style="text-align:center">${it.qtd}</td>
     </tr>`).join('')}
   </tbody></table></div>`
-  openModal(`📋 Romaneio Nº ${orcNumFmt(o)}`,infoHtml+tblHtml,
-    `<button class="btn btn-s" onclick="closeModal()">Fechar</button>
-     <button class="btn btn-sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="closeModal();gerarLinkRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar Link</button>
-     <button class="btn btn-p btn-sm" onclick="closeModal();imprimirRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Imprimir</button>`)
+  // Carrega todas as retiradas do Firebase
+  let retHtml=''
+  if(_fdb){
+    try{
+      const{allRet,ciPfx,cancelId}=await _collectRomAllRet(id)
+      const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+      const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
+      const cancelledIdxs=await _getRomCancelados(id,allRet.length,ciPfx)
+      const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
+      if(retiradas.length){
+        retHtml=`<div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--cara);margin-bottom:8px;padding-bottom:6px;border-bottom:1.5px solid var(--cream2)">✍️ Retiradas (${retiradas.length})</div>
+          ${retiradas.map((r,i)=>`<div style="border:1px solid #DDD5C8;border-radius:8px;padding:10px 14px;margin-bottom:8px;background:#FAF7F4;display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:#3D3028">${r.nome}</div>
+              <div style="font-size:11px;color:#7A6E62;margin-top:2px">${r.dataFmt||''}${r.itens&&r.itens.length?' · '+r.itens.length+' item(s) retirado(s)':''}</div>
+              ${r.ip?`<div style="font-size:11px;color:#9A8E82;margin-top:2px">IP: ${r.ip}${r.device?' · '+(r.device==='Dispositivo Móvel'?'📱':'💻')+' '+r.device:''}</div>`:''}
+              ${r.obs?`<div style="margin-top:6px;font-size:11px;color:#7A5A2A;font-style:italic"><strong>Obs:</strong> ${r.obs}</div>`:''}
+            </div>
+            <span style="background:#E8F5E9;color:#2E7D32;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0">${i+1}ª retirada</span>
+          </div>`).join('')}
+        </div>`
+      }
+    }catch(e){console.warn('verRomaneioItens retiradas:',e)}
+  }
+  openModal(`📋 Romaneio Nº ${orcNumFmt(o)}`,infoHtml+retHtml+tblHtml,footer)
 }
 async function imprimirRomaneio(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
