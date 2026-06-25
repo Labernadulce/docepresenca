@@ -5000,15 +5000,17 @@ function showRomaneioClientView(raw){
   // Verifica retiradas anteriores e monta UI de retirada parcial
   if(orcId&&!orcId.startsWith('z.')){
     const _checkRomSig=async()=>{
+      const _btn=document.querySelector('.rv-btn-confirm')
+      if(_btn){_btn.disabled=true;_btn.textContent='⏳ Verificando retiradas anteriores...'}
       let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
-      if(!_fdb)return
+      if(!_fdb){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
       try{
         const cancelSnap=await _fdb.collection('assinaturas').doc('romcancel'+orcId).get()
         const cancelTime=cancelSnap.exists?cancelSnap.data().data:null
         const baseId='rom'+orcId
         const allRet=[]
         const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-        if(!firstSnap.exists)return
+        if(!firstSnap.exists){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
         const firstData=firstSnap.data()
         if(firstData.retiradas)allRet.push(...firstData.retiradas)
         else if(firstData.retirada)allRet.push(firstData.retirada)
@@ -5026,7 +5028,7 @@ function showRomaneioClientView(raw){
         // Filtra também retiradas individualmente anuladas (romci docs)
         const cancelledIdxs=await _getRomCancelados(orcId,retiradasPosCancel.length)
         const retiradas=retiradasPosCancel.filter((_,i)=>!cancelledIdxs.has(i+1))
-        if(!retiradas.length)return
+        if(!retiradas.length){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
         const jaRetirados=new Set(retiradas.flatMap(r=>r.itens||[]))
         _romItensJaRetirados=jaRetirados
         const checkSvg='<svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -5061,9 +5063,9 @@ function showRomaneioClientView(raw){
             <div style="padding:9px 12px;background:#FFF8EC;font-size:12px;color:#7A5A2A;font-weight:700">${restantes} iten${restantes!==1?'s':''} ainda não retirado${restantes!==1?'s':''} — marque os itens que está retirando agora</div>
           </div>`)
           const btn=document.querySelector('.rv-btn-confirm')
-          if(btn)btn.textContent='✅ Confirmar Retirada dos Itens Marcados'
+          if(btn){btn.disabled=false;btn.textContent='✅ Confirmar Retirada dos Itens Marcados'}
         }
-      }catch(e){console.warn('rom sig check:',e)}
+      }catch(e){console.warn('rom sig check:',e);if(_btn&&_btn.disabled){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}}
     }
     _checkRomSig()
   }
@@ -5116,9 +5118,14 @@ async function confirmarRomaneioRecebimento(){
   const novaRetirada={nome:nomeInp,data:isoNow,dataFmt:agora,itens:itensConfirmados,num,ip,device,browser,sig:sigImg}
   if(obsVal)novaRetirada.obs=obsVal
   // Salva no Firestore — cada retirada é um novo doc (CREATE, nunca UPDATE em doc existente)
+  let _savedOk=!orcId||orcId.startsWith('z.')
   if(orcId&&!orcId.startsWith('z.')){
     let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
-    if(_fdb)try{
+    if(!_fdb){
+      if(sec)sec.innerHTML=`<div style="text-align:center;padding:28px 16px"><div style="font-size:44px;margin-bottom:12px">❌</div><div style="font-size:15px;color:#B00020;font-weight:700">Sem conexão com o servidor</div><div style="font-size:13px;color:#5A4A3A;margin-top:8px">Verifique sua internet e tente novamente.</div><button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:#8A7060;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Tentar novamente</button></div>`
+      return
+    }
+    try{
       const baseId='rom'+orcId
       const firstRef=_fdb.collection('assinaturas').doc(baseId)
       const firstSnap=await firstRef.get()
@@ -5136,11 +5143,14 @@ async function confirmarRomaneioRecebimento(){
           seq++
         }
       }
+      _savedOk=true
     }catch(e){
       console.error('rom sig write FALHOU:',e)
-      alert('DEBUG — Erro ao salvar retirada:\n'+e.message+'\nCódigo: '+e.code)
+      if(sec)sec.innerHTML=`<div style="text-align:center;padding:28px 16px"><div style="font-size:44px;margin-bottom:12px">❌</div><div style="font-size:15px;color:#B00020;font-weight:700">Erro ao registrar retirada</div><div style="font-size:13px;color:#5A4A3A;margin-top:8px">${e.message}</div><button onclick="location.reload()" style="margin-top:16px;padding:10px 24px;background:#8A7060;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Tentar novamente</button></div>`
+      return
     }
   }
+  if(!_savedOk)return
   // Mostra confirmação
   const nItens=itensConfirmados.length
   const okArea=document.getElementById('rvOkArea')
