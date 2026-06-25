@@ -4647,8 +4647,36 @@ async function verRomaneioItens(id){
   }
   openModal(`📋 Romaneio Nº ${orcNumFmt(o)}`,infoHtml+retHtml+tblHtml,footer)
 }
-async function imprimirRomaneio(id){
+async function imprimirRomaneio(id,opc){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
+  // Se há 2 opções e não foi especificada qual, pergunta antes de imprimir
+  if(o.entrega2&&opc===undefined){
+    openModal('🖨️ Imprimir Romaneio',`
+      <p style="font-size:14px;color:var(--txt2);margin-bottom:18px">Este romaneio possui <strong>2 opções de entrega</strong>. Qual deseja imprimir?</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button onclick="closeModal();imprimirRomaneio('${id}',1)" style="padding:14px 18px;background:var(--cream2);border:1.5px solid var(--cream2);border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;font-family:inherit">
+          <div style="color:var(--cara)">Opção 1 — ${o.entrega==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</div>
+          <div style="font-size:12px;font-weight:400;color:var(--txt3);margin-top:3px">${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):''}${o.endEntrega?' — '+o.endEntrega:''}</div>
+        </button>
+        <button onclick="closeModal();imprimirRomaneio('${id}',2)" style="padding:14px 18px;background:#EEF4FF;border:1.5px solid #BBDEFB;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;font-family:inherit">
+          <div style="color:#1565C0">Opção 2 — ${o.entrega2==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</div>
+          <div style="font-size:12px;font-weight:400;color:var(--txt3);margin-top:3px">${o.dataEntrega2?fmtDate(o.dataEntrega2)+(o.horaEntrega2?' às '+o.horaEntrega2:''):''}${o.endEntrega2?' — '+o.endEntrega2:''}</div>
+        </button>
+        <button onclick="closeModal();imprimirRomaneio('${id}',0)" style="padding:12px 18px;background:#fff;border:1.5px solid var(--cream2);border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;text-align:left;font-family:inherit;color:var(--txt2)">
+          📄 Imprimir as duas opções juntas
+        </button>
+      </div>`,
+      `<button class="btn btn-s" onclick="closeModal()">Cancelar</button>`)
+    return
+  }
+  // opc: 1 = apenas opção 1, 2 = apenas opção 2, 0 ou undefined = todas
+  const useOpc1=opc===undefined||opc===0||opc===1
+  const useOpc2=opc===0||opc===2
+  // Monta dados da(s) opção(ões) selecionadas
+  const entregaEfetiva=useOpc2&&!useOpc1?o.entrega2:o.entrega
+  const dataEntregaEfetiva=useOpc2&&!useOpc1?(o.dataEntrega2||o.dataEntrega):o.dataEntrega
+  const horaEntregaEfetiva=useOpc2&&!useOpc1?(o.horaEntrega2||o.horaEntrega):o.horaEntrega
+  const endEntregaEfetiva=useOpc2&&!useOpc1?o.endEntrega2:o.endEntrega
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
   const prods=DB.get(S.PRODUTOS)
   const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
@@ -4728,13 +4756,23 @@ async function imprimirRomaneio(id){
         ${(()=>{
           const cell=(lbl,val)=>`<div style="flex:1;min-width:160px;padding:11px 16px;background:#FAF7F4;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#9A8E82;margin-bottom:5px;font-weight:700">${lbl}</div><div style="font-size:13px;font-weight:700;color:#3D3028;line-height:1.3">${val}</div></div>`
           const r=[]
-          if(o.dataEntrega)r.push(cell('Data da Entrega',fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:'')))
-          if(o.entrega)r.push(cell('Modalidade',o.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'))
+          if(useOpc1&&useOpc2){
+            if(o.dataEntrega)r.push(cell('Opção 1 — Data da Entrega',fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:'')))
+            if(o.entrega)r.push(cell('Opção 1 — Modalidade',o.entrega==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'))
+            if(o.endEntrega)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega — Opção 1</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega}</div></div>`)
+            if(o.entrega2){
+              if(o.dataEntrega2)r.push(cell('Opção 2 — Data da Entrega',fmtDate(o.dataEntrega2)+(o.horaEntrega2?' às '+o.horaEntrega2:'')))
+              r.push(cell('Opção 2 — Modalidade',o.entrega2==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'))
+              if(o.endEntrega2)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega — Opção 2</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega2}</div></div>`)
+            }
+          }else{
+            if(dataEntregaEfetiva)r.push(cell('Data da Entrega',fmtDate(dataEntregaEfetiva)+(horaEntregaEfetiva?' às '+horaEntregaEfetiva:'')))
+            if(entregaEfetiva)r.push(cell('Modalidade',entregaEfetiva==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'))
+            if(endEntregaEfetiva)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${endEntregaEfetiva}</div></div>`)
+          }
           if(o.pgto)r.push(cell('Pagamento',o.pgto))
           if(o.noivos)r.push(cell('Nome dos Noivos',o.noivos))
           if(o.dataEvento)r.push(cell('Data do Evento',fmtDate(o.dataEvento)))
-          if(o.endEntrega)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega (Opção 1)</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega}</div></div>`)
-          if(o.entrega2){r.push(cell('Opção 2 — Modalidade',o.entrega2==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'));if(o.dataEntrega2)r.push(cell('Opção 2 — Data',fmtDate(o.dataEntrega2)+(o.horaEntrega2?' às '+o.horaEntrega2:'')));if(o.endEntrega2)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega (Opção 2)</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega2}</div></div>`)}
           return r.join('')
         })()}
       </div>
