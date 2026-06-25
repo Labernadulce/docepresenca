@@ -4462,7 +4462,10 @@ function renderRomTable(){
     <td>${fmtDate(o.data)}</td>
     <td><strong>${clienteNome(o.cliId)}</strong>${o.romAssinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${o.romAssinatura.nome}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª)':''}</span>`:''}</td>
     <td>${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
-    <td>${o.entrega?(o.entrega==='entrega'?'🚚 Entrega':'🏪 Retira'):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td onclick="event.stopPropagation();editarModalidadeRom('${o.id}')" style="cursor:pointer" title="Clique para editar modalidade/endereço">
+      ${o.entrega==='entrega'?`<span style="color:#1565C0;font-weight:600">🚚 Entrega${o.endEntrega?`<br><small style="font-weight:400;color:var(--txt3)">${o.endEntrega}</small>`:''}</span>`:`<span style="color:#2E7D32;font-weight:600">🏪 Retira</span>`}
+      <svg width="10" height="10" fill="none" viewBox="0 0 24 24" style="margin-left:4px;color:var(--txt3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </td>
     <td><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
     <td style="white-space:nowrap" onclick="event.stopPropagation()">
       <button class="btn-ic" style="color:#25D366" title="Enviar Link" onclick="gerarLinkRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -4471,6 +4474,43 @@ function renderRomTable(){
     </td>
   </tr>`).join('')}
   </tbody></table>`
+}
+function editarModalidadeRom(id){
+  const orcs=DB.get(S.ORCAMENTOS)||[]
+  const o=orcs.find(x=>x.id===id);if(!o)return
+  openModal('🚚 Modalidade de Entrega',`
+    <div class="fg" style="margin-bottom:14px">
+      <label>Modalidade</label>
+      <select id="romModSel" onchange="romModToggleEnd()" style="font-size:14px">
+        <option value="retira" ${(o.entrega||'retira')==='retira'?'selected':''}>🏪 Cliente Retira</option>
+        <option value="entrega" ${o.entrega==='entrega'?'selected':''}>🚚 Laberna Dulce Entrega</option>
+      </select>
+    </div>
+    <div id="romEndBox" style="display:${o.entrega==='entrega'?'block':'none'}">
+      <div class="fg">
+        <label>Endereço de Entrega</label>
+        <input id="romEndInp" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade...">
+      </div>
+    </div>`,
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button>
+     <button class="btn btn-p" onclick="salvarModalidadeRom('${id}')">Salvar</button>`)
+}
+function romModToggleEnd(){
+  const box=document.getElementById('romEndBox')
+  if(box)box.style.display=document.getElementById('romModSel').value==='entrega'?'block':'none'
+}
+function salvarModalidadeRom(id){
+  const orcs=DB.get(S.ORCAMENTOS)||[]
+  const idx=orcs.findIndex(x=>x.id===id);if(idx<0)return
+  const mod=document.getElementById('romModSel').value
+  const end=(document.getElementById('romEndInp')||{}).value?.trim()||''
+  orcs[idx].entrega=mod
+  if(mod==='entrega')orcs[idx].endEntrega=end
+  else delete orcs[idx].endEntrega
+  DB.set(S.ORCAMENTOS,orcs)
+  closeModal()
+  renderRomTable()
+  toast('Modalidade atualizada','ok')
 }
 async function verRomaneioItens(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
