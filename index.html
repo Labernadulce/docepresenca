@@ -4791,17 +4791,16 @@ async function limparHistoricoRom(orcId){
   confirmarModal('Remover permanentemente os registros cancelados/anulados?<br><small style="color:var(--txt3)">Os registros válidos serão preservados num novo ponto de partida limpo.</small>',async()=>{
     if(!_fdb)return toast('Firebase indisponível','warn')
     try{
-      const cleanRef=_fdb.collection('assinaturas').doc('romclean'+orcId)
-      const existingClean=await cleanRef.get()
-      if(existingClean.exists)return toast('Histórico já foi limpo anteriormente. Para nova limpeza, anule primeiro as entradas indesejadas.','warn')
+      const base=await _getRomBase(orcId)
+      const nextV=(base.cleanVersion||0)+1
+      const newBaseId=nextV===1?'romclean'+orcId:'romck'+nextV+orcId
       const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
-      if(!allRet.length)return toast('Nenhuma retirada encontrada','warn')
       const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
       const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
       const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
-      // Cria doc de checkpoint limpo (operação CREATE — sem precisar de update/delete)
-      await cleanRef.set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
+      if(!validRet.length)return toast('Nenhuma retirada válida para preservar — todas foram anuladas.','warn')
+      await _fdb.collection('assinaturas').doc(newBaseId).set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
       toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
       editarDocAssinado(orcId)
     }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
@@ -4824,12 +4823,17 @@ async function _addRomCancelado(orcId,idx,ciPfx){
   if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,_idx:idx,data:new Date().toISOString()})
 }
 async function _getRomBase(orcId){
-  if(!_fdb)return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null}
+  if(!_fdb)return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null,cleanVersion:0}
   try{
+    // Verifica versões de limpeza do maior para o menor (suporta até v5)
+    for(let v=5;v>=2;v--){
+      const s=await _fdb.collection('assinaturas').doc('romck'+v+orcId).get()
+      if(s.exists)return{baseId:'romck'+v+orcId,ciPfx:'romcick'+v+orcId+'_',cancelId:'romcancelck'+v+orcId,isClean:true,cleanRet:s.data().retiradas||[],cleanVersion:v}
+    }
     const s=await _fdb.collection('assinaturas').doc('romclean'+orcId).get()
-    if(s.exists)return{baseId:'romclean'+orcId,ciPfx:'romcicl'+orcId+'_',cancelId:'romcancelcl'+orcId,isClean:true,cleanRet:s.data().retiradas||[]}
+    if(s.exists)return{baseId:'romclean'+orcId,ciPfx:'romcicl'+orcId+'_',cancelId:'romcancelcl'+orcId,isClean:true,cleanRet:s.data().retiradas||[],cleanVersion:1}
   }catch(e){}
-  return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null}
+  return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null,cleanVersion:0}
 }
 async function _collectRomAllRet(orcId){
   const base=await _getRomBase(orcId)
@@ -6259,9 +6263,8 @@ async function _fbInit(){
         }
       })
       if(!_sigCarregado){
-        // Separa cancels por namespace para não bloquear romclean com romcancel antigo
-        const canceladosOld=new Set(snap.docs.filter(d=>d.id.startsWith('romcancel')&&!d.id.startsWith('romcancelcl')).map(d=>d.data()._orcId||''))
-        const canceladosClean=new Set(snap.docs.filter(d=>d.id.startsWith('romcancelcl')).map(d=>d.data()._orcId||''))
+        // Set de IDs de docs de cancel (para lookup O(1) por versão)
+        const cancelSet=new Set(snap.docs.filter(d=>d.id.startsWith('romcancel')).map(d=>d.id))
         snap.docs.forEach(doc=>{
           const docId=doc.id
           if(docId.startsWith('romcancel'))return
@@ -6271,8 +6274,12 @@ async function _fbInit(){
             const retirada=sig.retirada||(sig.retiradas||[]).slice(-1)[0]
             if(!retirada)return
             const realOrcId=sig._orcId||(docId.startsWith('romclean')?docId.slice(8):docId.startsWith('rom')?docId.slice(3):docId)
-            const isCleanDoc=docId.startsWith('romclean')
-            if(isCleanDoc?canceladosClean.has(realOrcId):canceladosOld.has(realOrcId))return
+            // Determina o ID de cancel esperado para a versão deste doc
+            let expectedCancelId
+            if(docId.startsWith('romck')){const m=docId.match(/^romck(\d+)/);expectedCancelId=m?'romcancelck'+m[1]+realOrcId:'romcancel'+realOrcId}
+            else if(docId.startsWith('romclean'))expectedCancelId='romcancelcl'+realOrcId
+            else expectedCancelId='romcancel'+realOrcId
+            if(cancelSet.has(expectedCancelId))return
             const seqNum=sig._seq||(sig.retiradas?sig.retiradas.length:1)
             const orcs=DB.get(S.ORCAMENTOS)||[]
             const idx=orcs.findIndex(o=>o.id===realOrcId)
