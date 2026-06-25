@@ -4453,53 +4453,47 @@ function renderRomTable(){
   if(f)rows=rows.filter(o=>o.status===f)
   const el=document.getElementById('romTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum orçamento</h3><p>Os orçamentos aparecerão aqui</p></div>`;return}
+  const bdg={pendente:'bdg-y',aprovado:'bdg-g',recusado:'bdg-r'}
+  el.innerHTML=`<table><thead><tr>
+    <th>Nº</th><th>Data</th><th>Cliente</th><th>Entrega</th><th>Modalidade</th><th>Status</th><th></th>
+  </tr></thead><tbody>
+  ${rows.map(o=>`<tr style="cursor:pointer" onclick="verRomaneioItens('${o.id}')">
+    <td style="font-weight:800;color:var(--cara)">${orcNumFmt(o)}</td>
+    <td>${fmtDate(o.data)}</td>
+    <td><strong>${clienteNome(o.cliId)}</strong>${o.romAssinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${o.romAssinatura.nome}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª)':''}</span>`:''}</td>
+    <td>${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td>${o.entrega?(o.entrega==='entrega'?'🚚 Entrega':'🏪 Retira'):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
+    <td style="white-space:nowrap" onclick="event.stopPropagation()">
+      <button class="btn-ic" style="color:#25D366" title="Enviar Link" onclick="gerarLinkRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn-ic" style="color:#7A6858;margin-left:4px" title="Editar Retiradas" onclick="editarDocAssinado('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn-ic" style="margin-left:4px" title="Imprimir" onclick="imprimirRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+    </td>
+  </tr>`).join('')}
+  </tbody></table>`
+}
+function verRomaneioItens(id){
+  const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const prods=DB.get(S.PRODUTOS)
   const getNome=it=>{if(!it.pId||it.pId==='_custom')return it.nome||'';const p=prods.find(x=>x.id===it.pId);return p?p.nome:(it.nome||'')}
-  el.innerHTML=rows.map(o=>{
-    const bdg={pendente:'bdg-y',aprovado:'bdg-g',recusado:'bdg-r'}
-    return`<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;background:var(--cream2);border-bottom:1px solid var(--cream2)">
-        <div style="display:flex;align-items:center;gap:12px">
-          <span style="font-weight:800;color:var(--cara);font-size:16px">Nº ${orcNumFmt(o)}</span>
-          <span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span>
-          <span style="font-size:12px;color:var(--txt3)">${fmtDate(o.data)}</span>
-          ${o.romAssinatura?`<button onclick="verRetiradasRom('${o.id}')" style="font-size:11px;font-weight:700;color:#2E7D32;background:#E8F5E9;padding:4px 10px;border-radius:12px;border:1px solid #66BB6A;cursor:pointer;font-family:inherit">✍️ ${o.romAssinatura.nome}${o.romAssinatura.dataFmt?' · '+o.romAssinatura.dataFmt:''}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª retirada)':''} — ver</button>`:''}
-        </div>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-s btn-sm" onclick="gerarLinkRomaneio('${o.id}')" style="background:#25D366;color:#fff;border-color:#25D366">
-            <svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Enviar Link
-          </button>
-          <button class="btn btn-sm" onclick="editarDocAssinado('${o.id}')" style="background:#7A6858;color:#fff;border:1.5px solid #7A6858">
-            <svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Editar Assinatura
-          </button>
-          <button class="btn btn-p btn-sm" onclick="imprimirRomaneio('${o.id}')">
-            <svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
-            Imprimir
-          </button>
-        </div>
-      </div>
-      <div style="padding:12px 16px">
-        <div style="display:flex;flex-wrap:wrap;gap:8px 24px;margin-bottom:10px;font-size:13px">
-          <span><strong style="color:var(--txt2)">Cliente:</strong> ${clienteNome(o.cliId)}</span>
-          ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
-          ${o.entrega?`<span><strong style="color:var(--txt2)">Modalidade:</strong> ${o.entrega==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</span>`:''}
-          ${o.endEntrega?`<span><strong style="color:var(--txt2)">Endereço:</strong> ${o.endEntrega}</span>`:''}
-
-        </div>
-        <div class="tc"><table style="margin:0">
-          <thead><tr><th style="width:36px">#</th><th>Produto / Descrição</th><th style="text-align:center">Qtd</th></tr></thead>
-          <tbody>${o.itens.map((it,i)=>`<tr>
-            <td style="text-align:center;color:var(--txt3);font-weight:700">${i+1}</td>
-            <td>${getNome(it)}${it.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${it.obs}</small>`:''}</td>
-            <td style="text-align:center">${it.qtd}</td>
-            
-          </tr>`).join('')}</tbody>
-        </table></div>
-      </div>
-    </div>`
-  }).join('')
+  const infoHtml=`<div style="display:flex;flex-wrap:wrap;gap:6px 20px;margin-bottom:14px;font-size:13px;padding:10px 14px;background:var(--cream2);border-radius:8px">
+    <span><strong>Cliente:</strong> ${clienteNome(o.cliId)}</span>
+    ${o.dataEntrega?`<span><strong>Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
+    ${o.entrega?`<span><strong>Modalidade:</strong> ${o.entrega==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</span>`:''}
+    ${o.endEntrega?`<span><strong>Endereço:</strong> ${o.endEntrega}</span>`:''}
+    ${o.romAssinatura?`<span style="color:#2E7D32"><strong>✍️ Retirado por:</strong> ${o.romAssinatura.nome}${o.romAssinatura.dataFmt?' em '+o.romAssinatura.dataFmt:''}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª retirada)':''}</span>`:''}
+  </div>`
+  const tblHtml=`<div class="tc"><table style="margin:0"><thead><tr><th style="width:36px">#</th><th>Produto / Descrição</th><th style="text-align:center">Qtd</th></tr></thead><tbody>
+    ${(o.itens||[]).map((it,i)=>`<tr>
+      <td style="text-align:center;color:var(--txt3);font-weight:700">${i+1}</td>
+      <td>${getNome(it)}${it.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${it.obs}</small>`:''}</td>
+      <td style="text-align:center">${it.qtd}</td>
+    </tr>`).join('')}
+  </tbody></table></div>`
+  openModal(`📋 Romaneio Nº ${orcNumFmt(o)}`,infoHtml+tblHtml,
+    `<button class="btn btn-s" onclick="closeModal()">Fechar</button>
+     <button class="btn btn-sm" style="background:#25D366;color:#fff;border-color:#25D366" onclick="closeModal();gerarLinkRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Enviar Link</button>
+     <button class="btn btn-p btn-sm" onclick="closeModal();imprimirRomaneio('${id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24" style="margin-right:4px"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Imprimir</button>`)
 }
 async function imprimirRomaneio(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
@@ -6241,7 +6235,9 @@ async function _fbInit(){
         }
       })
       if(!_sigCarregado){
-        const cancelados=new Set(snap.docs.filter(d=>d.id.startsWith('romcancel')).map(d=>d.data()._orcId||''))
+        // Separa cancels por namespace para não bloquear romclean com romcancel antigo
+        const canceladosOld=new Set(snap.docs.filter(d=>d.id.startsWith('romcancel')&&!d.id.startsWith('romcancelcl')).map(d=>d.data()._orcId||''))
+        const canceladosClean=new Set(snap.docs.filter(d=>d.id.startsWith('romcancelcl')).map(d=>d.data()._orcId||''))
         snap.docs.forEach(doc=>{
           const docId=doc.id
           if(docId.startsWith('romcancel'))return
@@ -6251,7 +6247,8 @@ async function _fbInit(){
             const retirada=sig.retirada||(sig.retiradas||[]).slice(-1)[0]
             if(!retirada)return
             const realOrcId=sig._orcId||(docId.startsWith('romclean')?docId.slice(8):docId.startsWith('rom')?docId.slice(3):docId)
-            if(cancelados.has(realOrcId))return
+            const isCleanDoc=docId.startsWith('romclean')
+            if(isCleanDoc?canceladosClean.has(realOrcId):canceladosOld.has(realOrcId))return
             const seqNum=sig._seq||(sig.retiradas?sig.retiradas.length:1)
             const orcs=DB.get(S.ORCAMENTOS)||[]
             const idx=orcs.findIndex(o=>o.id===realOrcId)
