@@ -4793,7 +4793,7 @@ async function limparHistoricoRom(orcId){
       const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
       // Cria doc de checkpoint limpo (operação CREATE — sem precisar de update/delete)
-      await cleanRef.set({retiradas:validRet,_cleanedAt:new Date().toISOString()})
+      await cleanRef.set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
       toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
       editarDocAssinado(orcId)
     }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
@@ -6226,7 +6226,7 @@ async function _fbInit(){
           if(change.type==='added'&&_sigCarregado){
             const retirada=sig.retirada||(sig.retiradas||[]).slice(-1)[0]
             if(!retirada)return
-            const realOrcId=sig._orcId||(docId.startsWith('rom')?docId.slice(3):docId)
+            const realOrcId=sig._orcId||(docId.startsWith('romclean')?docId.slice(8):docId.startsWith('rom')?docId.slice(3):docId)
             const seqNum=sig._seq||(sig.retiradas?sig.retiradas.length:1)
             toast(`✍️ Romaneio Nº ${retirada.num||sig.num||'?'} retirada por ${retirada.nome}!`,'ok')
             const orcs=DB.get(S.ORCAMENTOS)||[]
@@ -6260,7 +6260,7 @@ async function _fbInit(){
           if(sig.retiradas||sig.retirada){
             const retirada=sig.retirada||(sig.retiradas||[]).slice(-1)[0]
             if(!retirada)return
-            const realOrcId=sig._orcId||(docId.startsWith('rom')?docId.slice(3):docId)
+            const realOrcId=sig._orcId||(docId.startsWith('romclean')?docId.slice(8):docId.startsWith('rom')?docId.slice(3):docId)
             if(cancelados.has(realOrcId))return
             const seqNum=sig._seq||(sig.retiradas?sig.retiradas.length:1)
             const orcs=DB.get(S.ORCAMENTOS)||[]
