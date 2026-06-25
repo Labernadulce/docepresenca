@@ -4798,9 +4798,13 @@ async function editarDocAssinado(orcId){
         </div>
       </div>`
     }).join('')
-    const footer=`<div style="margin-top:16px;border-top:1px solid #E8E0D8;padding-top:14px;display:flex;justify-content:space-between;align-items:center;gap:10px">
-      <button onclick="excluirRomaneio('${orcId}')" style="padding:9px 16px;background:#fff;color:#7A6E62;border:1.5px solid #C4B09A;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🗑 Excluir Romaneio</button>
-      <button onclick="anularRetiradasRom('${orcId}')" style="padding:9px 16px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⛔ Anular Todas as Retiradas</button>
+    const hasCancelled=cancelledIdxs.size>0
+    const footer=`<div style="margin-top:16px;border-top:1px solid #E8E0D8;padding-top:14px;display:flex;flex-direction:column;gap:8px">
+      ${hasCancelled?`<button onclick="limparHistoricoRom('${orcId}')" style="padding:9px 16px;background:#E8F5E9;color:#2E7D32;border:1.5px solid #66BB6A;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;width:100%">🧹 Limpar registros cancelados/anulados</button>`:''}
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <button onclick="excluirRomaneio('${orcId}')" style="padding:9px 16px;background:#fff;color:#7A6E62;border:1.5px solid #C4B09A;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">🗑 Excluir Romaneio</button>
+        <button onclick="anularRetiradasRom('${orcId}')" style="padding:9px 16px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⛔ Anular Todas as Retiradas</button>
+      </div>
     </div>`
     openModal(`✏️ Documento Assinado — Romaneio Nº ${orcNumFmt(o)}`,rows+footer)
   }catch(e){console.error(e);toast('Erro ao carregar documento','warn')}
@@ -4835,6 +4839,65 @@ async function excluirRomaneio(orcId){
     render('romaneio')
     toast('Romaneio removido do histórico','ok')
   }catch(e){toast('Erro: '+e.message,'warn')}
+  })
+}
+
+async function limparHistoricoRom(orcId){
+  confirmarModal('Remover permanentemente os registros cancelados/anulados?<br><small style="color:var(--txt3)">Os registros válidos serão reagrupados em sequência. Esta ação não pode ser desfeita.</small>',async()=>{
+    if(!_fdb)return toast('Firebase indisponível','warn')
+    try{
+      const baseId='rom'+orcId
+      const allRet=[]
+      const refsToDelete=[]
+      // Coleta docs principais
+      const firstRef=_fdb.collection('assinaturas').doc(baseId)
+      const firstSnap=await firstRef.get()
+      if(!firstSnap.exists)return toast('Nenhuma retirada encontrada','warn')
+      const fd=firstSnap.data()
+      if(fd.retiradas)allRet.push(...fd.retiradas)
+      else if(fd.retirada)allRet.push(fd.retirada)
+      refsToDelete.push(firstRef)
+      let seq=2
+      while(seq<100){
+        const ref=_fdb.collection('assinaturas').doc(baseId+seq)
+        const snap=await ref.get()
+        if(!snap.exists)break
+        const sd=snap.data()
+        if(sd.retirada)allRet.push(sd.retirada)
+        else if(sd.retiradas)allRet.push(...sd.retiradas)
+        refsToDelete.push(ref)
+        seq++
+      }
+      // Coleta cancelamentos individuais
+      const ciSnaps=await Promise.all(Array.from({length:allRet.length},(_,i)=>
+        _fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).get().catch(()=>({exists:false}))
+      ))
+      const cancelledIdxs=new Set()
+      ciSnaps.forEach((s,i)=>{
+        if(s.exists){
+          cancelledIdxs.add(i+1)
+          refsToDelete.push(_fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)))
+        }
+      })
+      // Cancelamento geral
+      const cancelRef=_fdb.collection('assinaturas').doc('romcancel'+orcId)
+      const cancelSnap=await cancelRef.get()
+      const cancelTime=cancelSnap.exists?cancelSnap.data().data:null
+      if(cancelSnap.exists)refsToDelete.push(cancelRef)
+      // Filtra válidas usando posições absolutas
+      const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
+      // Deleta tudo
+      await Promise.all(refsToDelete.map(r=>r.delete()))
+      // Re-salva apenas as válidas em sequência compacta
+      if(validRet.length>0){
+        await firstRef.set({retiradas:[validRet[0]]})
+        for(let i=1;i<validRet.length;i++){
+          await _fdb.collection('assinaturas').doc(baseId+(i+1)).set({retirada:validRet[i],_seq:i+1,_orcId:orcId})
+        }
+      }
+      toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
+      editarDocAssinado(orcId)
+    }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
   })
 }
 
