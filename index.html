@@ -4802,7 +4802,8 @@ async function gerarLinkRomaneio(orcId){
   const payload={
     n:e.fantasia||e.nome||'',ef:e.fone||'',ew:e.wa||'',ee:e.email||'',
     num:orcNumFmt(o),dt:o.data,
-    dd:o.dataEntrega||'',hd:o.horaEntrega||'',xe:o.endEntrega||'',md:o.entrega||'',ob:o.obs||'',
+    dd:o.dataEntrega||'',hd:o.horaEntrega||'',xe:o.endEntrega||'',md:o.entrega||'',
+    md2:o.entrega2||'',dd2:o.dataEntrega2||'',hd2:o.horaEntrega2||'',xe2:o.endEntrega2||'',ob:o.obs||'',
     cn:cli.nome||'',cf:cli.fone||'',
     it:o.itens.map(x=>({n:getNome(x),q:x.qtd}))
   }
@@ -5051,6 +5052,7 @@ function showRomaneioClientView(raw){
   const ef=raw.ef||'',ew=raw.ew||'',ee=raw.ee||''
   const num=raw.num||'001'
   const dt=raw.dt||'',dd=raw.dd||'',hd=raw.hd||'',xe=raw.xe||'',md=raw.md||'',ob=raw.ob||''
+  const md2=raw.md2||'',dd2=raw.dd2||'',hd2=raw.hd2||'',xe2=raw.xe2||''
   const cn=raw.cn||'',cf=raw.cf||''
   const waNum=(ew||ef||'').replace(/\D/g,'')
   const orcId=raw._orcId||''  // ID real do orçamento, vem no payload
@@ -5115,9 +5117,14 @@ function showRomaneioClientView(raw){
         const cs=[]
         if(cn)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Cliente</div><div class="rv-info-val">${cn}</div></div>`)
         if(cf)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Telefone</div><div class="rv-info-val">${cf}</div></div>`)
-        if(dd)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Data de Entrega</div><div class="rv-info-val">${fmtDate(dd)}${hd?' às '+hd:''}</div></div>`)
-        if(md)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Modalidade</div><div class="rv-info-val">${md==='entrega'?'Laberna Dulce Entrega':'Cliente Retira'}</div></div>`)
-        if(xe)cs.push(`<div class="rv-info-cell" style="flex-basis:100%"><div class="rv-info-lbl">Endereço de Entrega</div><div class="rv-info-val">${xe}</div></div>`)
+        if(dd)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">${md2?'Opção 1 — Data de Entrega':'Data de Entrega'}</div><div class="rv-info-val">${fmtDate(dd)}${hd?' às '+hd:''}</div></div>`)
+        if(md)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">${md2?'Opção 1 — Modalidade':'Modalidade'}</div><div class="rv-info-val">${md==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</div></div>`)
+        if(xe)cs.push(`<div class="rv-info-cell" style="flex-basis:100%;background:#EEF4FF"><div class="rv-info-lbl" style="color:#1565C0">🚚 ${md2?'Endereço de Entrega — Opção 1':'Endereço de Entrega'}</div><div class="rv-info-val" style="color:#1565C0">${xe}</div></div>`)
+        if(md2){
+          if(dd2)cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Opção 2 — Data de Entrega</div><div class="rv-info-val">${fmtDate(dd2)}${hd2?' às '+hd2:''}</div></div>`)
+          cs.push(`<div class="rv-info-cell"><div class="rv-info-lbl">Opção 2 — Modalidade</div><div class="rv-info-val">${md2==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'}</div></div>`)
+          if(xe2)cs.push(`<div class="rv-info-cell" style="flex-basis:100%;background:#EEF4FF"><div class="rv-info-lbl" style="color:#1565C0">🚚 Endereço de Entrega — Opção 2</div><div class="rv-info-val" style="color:#1565C0">${xe2}</div></div>`)
+        }
         return cs.length?`<div class="rv-info-grid">${cs.join('')}</div>`:''
       })()}
 
