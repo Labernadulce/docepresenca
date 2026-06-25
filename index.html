@@ -4667,23 +4667,13 @@ function copiarLinkRom(){
 async function verRetiradasRom(orcId){
   if(!_fdb)return toast('Firebase indisponível','warn')
   try{
-    const baseId='rom'+orcId
-    const retiradas=[]
-    const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-    if(!firstSnap.exists)return toast('Nenhuma retirada registrada para este romaneio','warn')
-    const firstData=firstSnap.data()
-    if(firstData.retiradas)retiradas.push(...firstData.retiradas)
-    else if(firstData.retirada)retiradas.push(firstData.retirada)
-    let seq=2
-    while(seq<100){
-      const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-      if(!seqSnap.exists||seqSnap.data()._purged)break
-      const seqData=seqSnap.data()
-      if(seqData.retirada)retiradas.push(seqData.retirada)
-      else if(seqData.retiradas)retiradas.push(...seqData.retiradas)
-      seq++
-    }
-    if(!retiradas.length)return toast('Nenhuma retirada registrada','warn')
+    const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
+    if(!allRet.length)return toast('Nenhuma retirada registrada para este romaneio','warn')
+    const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+    const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
+    const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
+    const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
+    if(!retiradas.length)return toast('Nenhuma retirada válida registrada','warn')
     const o=DB.get(S.ORCAMENTOS).find(x=>x.id===orcId)||{}
     const itensTotal=(o.itens||[]).length
     const itensTotalRetirados=new Set(retiradas.flatMap(r=>r.itens||[])).size
