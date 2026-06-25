@@ -4522,24 +4522,8 @@ async function imprimirRomaneio(id){
   let sigSection=''
   if(_fdb){
     try{
-      const baseId='rom'+id
-      const allRet=[]
-      const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-      if(firstSnap.exists){
-        const fd=firstSnap.data()
-        if(fd.retiradas)allRet.push(...fd.retiradas)
-        else if(fd.retirada)allRet.push(fd.retirada)
-        let seq=2
-        while(seq<100){
-          const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!ss.exists||ss.data()._purged)break
-          const sd=ss.data()
-          if(sd.retirada)allRet.push(sd.retirada)
-          else if(sd.retiradas)allRet.push(...sd.retiradas)
-          seq++
-        }
-      }
-      const cancelledIdxs=await _getRomCancelados(id,allRet.length)
+      const{allRet,ciPfx}=await _collectRomAllRet(id)
+      const cancelledIdxs=await _getRomCancelados(id,allRet.length,ciPfx)
       const retiradas=allRet.filter((_,i)=>!cancelledIdxs.has(i+1))
       if(retiradas.length){
         const cards=retiradas.map((r,i)=>`
@@ -4730,25 +4714,9 @@ async function anularRetiradasRom(orcId){
   confirmarModal('Anular <strong>todas</strong> as retiradas deste romaneio?<br><small style="color:var(--txt3)">O link poderá ser reutilizado como novo.</small>',async()=>{
     if(!_fdb)return toast('Firebase indisponível','warn')
     try{
-      const baseId='rom'+orcId
-      const allRet=[]
-      const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-      if(firstSnap.exists){
-        const fd=firstSnap.data()
-        if(fd.retiradas)allRet.push(...fd.retiradas)
-        else if(fd.retirada)allRet.push(fd.retirada)
-        let seq=2
-        while(seq<100){
-          const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!ss.exists||ss.data()._purged)break
-          const sd=ss.data()
-          if(sd.retirada)allRet.push(sd.retirada)
-          else if(sd.retiradas)allRet.push(...sd.retiradas)
-          seq++
-        }
-      }
-      if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1)))
-      try{const ref=_fdb.collection('assinaturas').doc('romcancel'+orcId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
+      const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
+      if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1,ciPfx)))
+      try{const ref=_fdb.collection('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
       const orcs=DB.get(S.ORCAMENTOS)||[]
       const idx=orcs.findIndex(o=>o.id===orcId)
       if(idx>=0){delete orcs[idx].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
@@ -4761,24 +4729,9 @@ async function anularRetiradasRom(orcId){
 async function editarDocAssinado(orcId){
   if(!_fdb)return toast('Firebase indisponível','warn')
   try{
-    const baseId='rom'+orcId
-    const allRet=[]
-    const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-    if(!firstSnap.exists)return toast('Nenhuma retirada registrada para este romaneio','warn')
-    const firstData=firstSnap.data()
-    if(firstData.retiradas)allRet.push(...firstData.retiradas)
-    else if(firstData.retirada)allRet.push(firstData.retirada)
-    let seq=2
-    while(seq<100){
-      const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-      if(!seqSnap.exists||seqSnap.data()._purged)break
-      const seqData=seqSnap.data()
-      if(seqData.retirada)allRet.push(seqData.retirada)
-      else if(seqData.retiradas)allRet.push(...seqData.retiradas)
-      seq++
-    }
+    const{allRet,ciPfx}=await _collectRomAllRet(orcId)
     if(!allRet.length)return toast('Nenhuma retirada registrada','warn')
-    const cancelledIdxs=await _getRomCancelados(orcId,allRet.length)
+    const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
     const o=DB.get(S.ORCAMENTOS).find(x=>x.id===orcId)||{}
     const rows=allRet.map((r,i)=>{
       const idx=i+1
@@ -4813,107 +4766,90 @@ async function editarDocAssinado(orcId){
 async function excluirRomaneio(orcId){
   confirmarModal('Excluir este romaneio do histórico?<br><small style="color:var(--txt3)">O badge de assinatura será removido e a impressão não mostrará mais as retiradas.</small>',async()=>{
     if(!_fdb)return toast('Firebase indisponível','warn')
-  try{
-    const baseId='rom'+orcId
-    const allRet=[]
-    const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-    if(firstSnap.exists){
-      const fd=firstSnap.data()
-      if(fd.retiradas)allRet.push(...fd.retiradas)
-      else if(fd.retirada)allRet.push(fd.retirada)
-      let seq=2
-      while(seq<100){
-        const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-        if(!ss.exists)break
-        const sd=ss.data()
-        if(sd.retirada)allRet.push(sd.retirada)
-        else if(sd.retiradas)allRet.push(...sd.retiradas)
-        seq++
-      }
-    }
-    if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1)))
-    try{const ref=_fdb.collection('assinaturas').doc('romcancel'+orcId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
-    const orcs=DB.get(S.ORCAMENTOS)||[]
-    const idx=orcs.findIndex(o=>o.id===orcId)
-    if(idx>=0){delete orcs[idx].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
-    render('romaneio')
-    toast('Romaneio removido do histórico','ok')
-  }catch(e){toast('Erro: '+e.message,'warn')}
+    try{
+      const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
+      if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1,ciPfx)))
+      try{const ref=_fdb.collection('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
+      const orcs=DB.get(S.ORCAMENTOS)||[]
+      const idx=orcs.findIndex(o=>o.id===orcId)
+      if(idx>=0){delete orcs[idx].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
+      render('romaneio')
+      toast('Romaneio removido do histórico','ok')
+    }catch(e){toast('Erro: '+e.message,'warn')}
   })
 }
 
 async function limparHistoricoRom(orcId){
-  confirmarModal('Remover permanentemente os registros cancelados/anulados?<br><small style="color:var(--txt3)">Os registros válidos serão reagrupados em sequência. Esta ação não pode ser desfeita.</small>',async()=>{
+  confirmarModal('Remover permanentemente os registros cancelados/anulados?<br><small style="color:var(--txt3)">Os registros válidos serão preservados num novo ponto de partida limpo.</small>',async()=>{
     if(!_fdb)return toast('Firebase indisponível','warn')
     try{
-      const baseId='rom'+orcId
-      const allRet=[]
-      const seqRefs=[]
-      // Coleta docs principais
-      const firstRef=_fdb.collection('assinaturas').doc(baseId)
-      const firstSnap=await firstRef.get()
-      if(!firstSnap.exists)return toast('Nenhuma retirada encontrada','warn')
-      const fd=firstSnap.data()
-      if(fd.retiradas)allRet.push(...fd.retiradas)
-      else if(fd.retirada)allRet.push(fd.retirada)
-      let seq=2
-      while(seq<100){
-        const ref=_fdb.collection('assinaturas').doc(baseId+seq)
-        const snap=await ref.get()
-        if(!snap.exists||snap.data()._purged)break
-        const sd=snap.data()
-        if(sd.retirada)allRet.push(sd.retirada)
-        else if(sd.retiradas)allRet.push(...sd.retiradas)
-        seqRefs.push(ref)
-        seq++
-      }
-      // Coleta cancelamentos individuais
-      const ciSnaps=await Promise.all(Array.from({length:allRet.length},(_,i)=>
-        _fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).get().catch(()=>({exists:false}))
-      ))
-      const cancelledIdxs=new Set()
-      ciSnaps.forEach((s,i)=>{if(s.exists&&!s.data()._cleared)cancelledIdxs.add(i+1)})
-      // Cancelamento geral
-      const cancelRef=_fdb.collection('assinaturas').doc('romcancel'+orcId)
-      const cancelSnap=await cancelRef.get()
+      const cleanRef=_fdb.collection('assinaturas').doc('romclean'+orcId)
+      const existingClean=await cleanRef.get()
+      if(existingClean.exists)return toast('Histórico já foi limpo anteriormente. Para nova limpeza, anule primeiro as entradas indesejadas.','warn')
+      const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
+      if(!allRet.length)return toast('Nenhuma retirada encontrada','warn')
+      const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
       const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
-      // Filtra válidas usando posições absolutas
+      const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
-      // Compacta: todos os válidos no doc1 (array), demais marcados como _purged
-      await firstRef.set({retiradas:validRet,_compactado:true})
-      // Marca docs sequenciais existentes como purged (sem deletar)
-      await Promise.all(seqRefs.map(r=>r.set({_purged:true})))
-      // Limpa romci docs (marca como _cleared)
-      await Promise.all(Array.from({length:allRet.length},(_,i)=>
-        _fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).set({_cleared:true})
-      ))
-      // Limpa romcancel
-      if(cancelSnap.exists)await cancelRef.set({_cleared:true})
+      // Cria doc de checkpoint limpo (operação CREATE — sem precisar de update/delete)
+      await cleanRef.set({retiradas:validRet,_cleanedAt:new Date().toISOString()})
       toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
       editarDocAssinado(orcId)
     }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
   })
 }
 
-async function _getRomCancelados(orcId,max){
+async function _getRomCancelados(orcId,max,ciPfx){
   if(!_fdb||!max)return new Set()
+  const pfx=ciPfx||('romci'+orcId+'_')
   try{
-    const snaps=await Promise.all(Array.from({length:max},(_,i)=>_fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).get().catch(()=>({exists:false}))))
+    const snaps=await Promise.all(Array.from({length:max},(_,i)=>_fdb.collection('assinaturas').doc(pfx+(i+1)).get().catch(()=>({exists:false}))))
     return new Set(snaps.map((s,i)=>s.exists&&!s.data()._cleared?i+1:null).filter(x=>x!==null))
   }catch(e){return new Set()}
 }
-async function _addRomCancelado(orcId,idx){
+async function _addRomCancelado(orcId,idx,ciPfx){
   if(!_fdb)throw new Error('Firebase indisponível')
-  const ref=_fdb.collection('assinaturas').doc('romci'+orcId+'_'+idx)
+  const pfx=ciPfx||('romci'+orcId+'_')
+  const ref=_fdb.collection('assinaturas').doc(pfx+idx)
   const snap=await ref.get()
   if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,_idx:idx,data:new Date().toISOString()})
+}
+async function _getRomBase(orcId){
+  if(!_fdb)return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null}
+  try{
+    const s=await _fdb.collection('assinaturas').doc('romclean'+orcId).get()
+    if(s.exists)return{baseId:'romclean'+orcId,ciPfx:'romcicl'+orcId+'_',cancelId:'romcancelcl'+orcId,isClean:true,cleanRet:s.data().retiradas||[]}
+  }catch(e){}
+  return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null}
+}
+async function _collectRomAllRet(orcId){
+  const base=await _getRomBase(orcId)
+  const{baseId,isClean,cleanRet}=base
+  const allRet=isClean?[...cleanRet]:[]
+  try{
+    if(!isClean){
+      const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
+      if(firstSnap.exists){const fd=firstSnap.data();if(fd.retiradas)allRet.push(...fd.retiradas);else if(fd.retirada)allRet.push(fd.retirada)}
+    }
+    let seq=2
+    while(seq<100){
+      const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
+      if(!seqSnap.exists||seqSnap.data()._purged)break
+      const sd=seqSnap.data()
+      if(sd.retirada)allRet.push(sd.retirada);else if(sd.retiradas)allRet.push(...sd.retiradas)
+      seq++
+    }
+  }catch(e){}
+  return{...base,allRet}
 }
 
 async function anularRetiradaIdx(orcId,idx){
   confirmarModal(`Anular a <strong>${idx}ª retirada</strong>?<br><small style="color:var(--txt3)">O registro fica visível como anulado no histórico.</small>`,async()=>{
     if(!_fdb)return toast('Firebase indisponível','warn')
     try{
-      await _addRomCancelado(orcId,idx)
+      const base=await _getRomBase(orcId)
+      await _addRomCancelado(orcId,idx,base.ciPfx)
       toast('Retirada anulada','ok')
       editarDocAssinado(orcId)
     }catch(e){toast('Erro ao anular: '+e.message,'warn')}
@@ -5062,26 +4998,11 @@ function showRomaneioClientView(raw){
       let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
       if(!_fdb){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
       try{
-        const cancelSnap=await _fdb.collection('assinaturas').doc('romcancel'+orcId).get()
+        const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
+        const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
         const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
-        const baseId='rom'+orcId
-        const allRet=[]
-        const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
-        if(!firstSnap.exists){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
-        const firstData=firstSnap.data()
-        if(firstData.retiradas)allRet.push(...firstData.retiradas)
-        else if(firstData.retirada)allRet.push(firstData.retirada)
-        let seq=2
-        while(seq<100){
-          const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!seqSnap.exists||seqSnap.data()._purged)break
-          const seqData=seqSnap.data()
-          if(seqData.retirada)allRet.push(seqData.retirada)
-          else if(seqData.retiradas)allRet.push(...seqData.retiradas)
-          seq++
-        }
         // Filtra usando posições absolutas (índice em allRet), evitando desalinhamento
-        const cancelledIdxs=await _getRomCancelados(orcId,allRet.length)
+        const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
         const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
         if(!retiradas.length){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
         const jaRetirados=new Set(retiradas.flatMap(r=>r.itens||[]))
@@ -5181,12 +5102,28 @@ async function confirmarRomaneioRecebimento(){
       return
     }
     try{
-      const baseId='rom'+orcId
-      const firstRef=_fdb.collection('assinaturas').doc(baseId)
-      const firstSnap=await firstRef.get()
-      if(!firstSnap.exists){
-        await firstRef.set({retiradas:[novaRetirada],num,nome:nomeInp,data:isoNow,dataFmt:agora})
+      const{baseId,isClean}=await _getRomBase(orcId)
+      if(!isClean){
+        // Namespace original: primeiro doc guarda array, subsequentes são individuais
+        const firstRef=_fdb.collection('assinaturas').doc(baseId)
+        const firstSnap=await firstRef.get()
+        if(!firstSnap.exists){
+          await firstRef.set({retiradas:[novaRetirada],num,nome:nomeInp,data:isoNow,dataFmt:agora})
+        }else{
+          let seq=2;let _written=false
+          while(seq<100){
+            const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
+            const nextSnap=await nextRef.get()
+            if(!nextSnap.exists||nextSnap.data()._purged){
+              await nextRef.set({retirada:novaRetirada,num,nome:nomeInp,data:isoNow,dataFmt:agora,_orcId:orcId,_seq:seq})
+              _written=true;break
+            }
+            seq++
+          }
+          if(!_written)throw new Error('Limite de retiradas atingido. Contacte o suporte.')
+        }
       }else{
+        // Namespace limpo (após limpeza): romclean{orcId} já existe, salvar em romclean{orcId}2, 3…
         let seq=2;let _written=false
         while(seq<100){
           const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
