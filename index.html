@@ -4530,7 +4530,7 @@ async function imprimirRomaneio(id){
         if(fd.retiradas)allRet.push(...fd.retiradas)
         else if(fd.retirada)allRet.push(fd.retirada)
         let seq=2
-        while(seq<20){
+        while(seq<100){
           const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
           if(!ss.exists)break
           const sd=ss.data()
@@ -4691,7 +4691,7 @@ async function verRetiradasRom(orcId){
     if(firstData.retiradas)retiradas.push(...firstData.retiradas)
     else if(firstData.retirada)retiradas.push(firstData.retirada)
     let seq=2
-    while(seq<20){
+    while(seq<100){
       const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
       if(!seqSnap.exists)break
       const seqData=seqSnap.data()
@@ -4738,7 +4738,7 @@ async function anularRetiradasRom(orcId){
         if(fd.retiradas)allRet.push(...fd.retiradas)
         else if(fd.retirada)allRet.push(fd.retirada)
         let seq=2
-        while(seq<20){
+        while(seq<100){
           const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
           if(!ss.exists)break
           const sd=ss.data()
@@ -4769,7 +4769,7 @@ async function editarDocAssinado(orcId){
     if(firstData.retiradas)allRet.push(...firstData.retiradas)
     else if(firstData.retirada)allRet.push(firstData.retirada)
     let seq=2
-    while(seq<20){
+    while(seq<100){
       const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
       if(!seqSnap.exists)break
       const seqData=seqSnap.data()
@@ -4818,7 +4818,7 @@ async function excluirRomaneio(orcId){
       if(fd.retiradas)allRet.push(...fd.retiradas)
       else if(fd.retirada)allRet.push(fd.retirada)
       let seq=2
-      while(seq<20){
+      while(seq<100){
         const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
         if(!ss.exists)break
         const sd=ss.data()
@@ -5015,7 +5015,7 @@ function showRomaneioClientView(raw){
         if(firstData.retiradas)allRet.push(...firstData.retiradas)
         else if(firstData.retirada)allRet.push(firstData.retirada)
         let seq=2
-        while(seq<20){
+        while(seq<100){
           const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
           if(!seqSnap.exists)break
           const seqData=seqSnap.data()
@@ -5130,16 +5130,17 @@ async function confirmarRomaneioRecebimento(){
       if(!firstSnap.exists){
         await firstRef.set({retiradas:[novaRetirada],num,nome:nomeInp,data:isoNow,dataFmt:agora})
       }else{
-        let seq=2
-        while(seq<20){
+        let seq=2;let _written=false
+        while(seq<100){
           const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
           const nextSnap=await nextRef.get()
           if(!nextSnap.exists){
             await nextRef.set({retirada:novaRetirada,num,nome:nomeInp,data:isoNow,dataFmt:agora,_orcId:orcId,_seq:seq})
-            break
+            _written=true;break
           }
           seq++
         }
+        if(!_written)throw new Error('Limite de retiradas atingido. Contacte o suporte.')
       }
       _savedOk=true
     }catch(e){
