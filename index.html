@@ -4464,6 +4464,7 @@ function renderRomTable(){
     <td>${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
     <td onclick="event.stopPropagation();editarModalidadeRom('${o.id}')" style="cursor:pointer" title="Clique para editar modalidade/endereço">
       ${o.entrega==='entrega'?`<span style="color:#1565C0;font-weight:600">🚚 Entrega${o.endEntrega?`<br><small style="font-weight:400;color:var(--txt3)">${o.endEntrega}</small>`:''}</span>`:`<span style="color:#2E7D32;font-weight:600">🏪 Retira</span>`}
+      ${o.entrega2?`<br><span style="font-size:11px;color:${o.entrega2==='entrega'?'#1565C0':'#2E7D32'};font-weight:600">${o.entrega2==='entrega'?'🚚':'🏪'} Opção 2${o.entrega2==='entrega'&&o.endEntrega2?': '+o.endEntrega2:''}</span>`:''}
       <svg width="10" height="10" fill="none" viewBox="0 0 24 24" style="margin-left:4px;color:var(--txt3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </td>
     <td><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
@@ -4478,26 +4479,85 @@ function renderRomTable(){
 function editarModalidadeRom(id){
   const orcs=DB.get(S.ORCAMENTOS)||[]
   const o=orcs.find(x=>x.id===id);if(!o)return
+  const has2=!!o.entrega2
   openModal('🚚 Modalidade de Entrega',`
-    <div class="fg" style="margin-bottom:14px">
-      <label>Modalidade</label>
-      <select id="romModSel" onchange="romModToggleEnd()" style="font-size:14px">
-        <option value="retira" ${(o.entrega||'retira')==='retira'?'selected':''}>🏪 Cliente Retira</option>
-        <option value="entrega" ${o.entrega==='entrega'?'selected':''}>🚚 Laberna Dulce Entrega</option>
-      </select>
-    </div>
-    <div id="romEndBox" style="display:${o.entrega==='entrega'?'block':'none'}">
-      <div class="fg">
-        <label>Endereço de Entrega</label>
-        <input id="romEndInp" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade...">
+    <div style="background:var(--cream2);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--cara);margin-bottom:10px">Opção 1</div>
+      <div class="frow" style="gap:10px;margin-bottom:8px">
+        <div class="fg"><label>Modalidade</label>
+          <select id="romModSel" onchange="romModToggleEnd(1)">
+            <option value="retira" ${(o.entrega||'retira')==='retira'?'selected':''}>🏪 Cliente Retira</option>
+            <option value="entrega" ${o.entrega==='entrega'?'selected':''}>🚚 Laberna Dulce Entrega</option>
+          </select>
+        </div>
+        <div class="fg"><label>Data</label><input type="date" id="romData1" value="${o.dataEntrega||''}"></div>
+        <div class="fg"><label>Hora</label><input type="time" id="romHora1" value="${o.horaEntrega||''}"></div>
       </div>
+      <div id="romEndBox" style="display:${o.entrega==='entrega'?'block':'none'}">
+        <div class="fg"><label>Endereço de Entrega</label>
+          <input id="romEndInp" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade...">
+        </div>
+      </div>
+    </div>
+    <div id="romOpc2Wrap">
+      ${has2?`
+      <div style="background:#EEF4FF;border-radius:8px;padding:12px 14px;margin-bottom:10px;border:1.5px solid #BBDEFB">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#1565C0">Opção 2</div>
+          <button onclick="romRemoverOpc2()" style="font-size:11px;color:#C62828;background:none;border:none;cursor:pointer;font-family:inherit">✕ Remover</button>
+        </div>
+        <div class="frow" style="gap:10px;margin-bottom:8px">
+          <div class="fg"><label>Modalidade</label>
+            <select id="romModSel2" onchange="romModToggleEnd(2)">
+              <option value="retira" ${o.entrega2==='retira'?'selected':''}>🏪 Cliente Retira</option>
+              <option value="entrega" ${o.entrega2==='entrega'?'selected':''}>🚚 Laberna Dulce Entrega</option>
+            </select>
+          </div>
+          <div class="fg"><label>Data</label><input type="date" id="romData2" value="${o.dataEntrega2||''}"></div>
+          <div class="fg"><label>Hora</label><input type="time" id="romHora2" value="${o.horaEntrega2||''}"></div>
+        </div>
+        <div id="romEndBox2" style="display:${o.entrega2==='entrega'?'block':'none'}">
+          <div class="fg"><label>Endereço de Entrega</label>
+            <input id="romEndInp2" value="${o.endEntrega2||''}" placeholder="Rua, número, bairro, cidade...">
+          </div>
+        </div>
+      </div>`:`
+      <button onclick="romAdicionarOpc2()" style="width:100%;padding:10px;background:#F0F7FF;color:#1565C0;border:1.5px dashed #90CAF9;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ Adicionar 2ª Opção de Entrega</button>`}
     </div>`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button>
      <button class="btn btn-p" onclick="salvarModalidadeRom('${id}')">Salvar</button>`)
 }
-function romModToggleEnd(){
-  const box=document.getElementById('romEndBox')
-  if(box)box.style.display=document.getElementById('romModSel').value==='entrega'?'block':'none'
+function romAdicionarOpc2(){
+  document.getElementById('romOpc2Wrap').innerHTML=`
+    <div style="background:#EEF4FF;border-radius:8px;padding:12px 14px;margin-bottom:10px;border:1.5px solid #BBDEFB">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#1565C0">Opção 2</div>
+        <button onclick="romRemoverOpc2()" style="font-size:11px;color:#C62828;background:none;border:none;cursor:pointer;font-family:inherit">✕ Remover</button>
+      </div>
+      <div class="frow" style="gap:10px;margin-bottom:8px">
+        <div class="fg"><label>Modalidade</label>
+          <select id="romModSel2" onchange="romModToggleEnd(2)">
+            <option value="retira">🏪 Cliente Retira</option>
+            <option value="entrega">🚚 Laberna Dulce Entrega</option>
+          </select>
+        </div>
+        <div class="fg"><label>Data</label><input type="date" id="romData2"></div>
+        <div class="fg"><label>Hora</label><input type="time" id="romHora2"></div>
+      </div>
+      <div id="romEndBox2" style="display:none">
+        <div class="fg"><label>Endereço de Entrega</label>
+          <input id="romEndInp2" placeholder="Rua, número, bairro, cidade...">
+        </div>
+      </div>
+    </div>`
+}
+function romRemoverOpc2(){
+  document.getElementById('romOpc2Wrap').innerHTML=`<button onclick="romAdicionarOpc2()" style="width:100%;padding:10px;background:#F0F7FF;color:#1565C0;border:1.5px dashed #90CAF9;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ Adicionar 2ª Opção de Entrega</button>`
+}
+function romModToggleEnd(n){
+  const sel=document.getElementById(n===2?'romModSel2':'romModSel')
+  const box=document.getElementById(n===2?'romEndBox2':'romEndBox')
+  if(box&&sel)box.style.display=sel.value==='entrega'?'block':'none'
 }
 function salvarModalidadeRom(id){
   const orcs=DB.get(S.ORCAMENTOS)||[]
@@ -4507,11 +4567,34 @@ function salvarModalidadeRom(id){
   if(mod==='entrega'&&!end){
     document.getElementById('romEndInp').style.border='2px solid #C62828'
     document.getElementById('romEndInp').focus()
-    return toast('Informe o endereço de entrega antes de salvar.','warn')
+    return toast('Informe o endereço de entrega (Opção 1).','warn')
   }
   orcs[idx].entrega=mod
+  orcs[idx].dataEntrega=(document.getElementById('romData1')||{}).value||orcs[idx].dataEntrega||''
+  orcs[idx].horaEntrega=(document.getElementById('romHora1')||{}).value||orcs[idx].horaEntrega||''
   if(mod==='entrega')orcs[idx].endEntrega=end
   else delete orcs[idx].endEntrega
+  // Opção 2
+  const sel2=document.getElementById('romModSel2')
+  if(sel2){
+    const mod2=sel2.value
+    const end2=(document.getElementById('romEndInp2')||{}).value?.trim()||''
+    if(mod2==='entrega'&&!end2){
+      document.getElementById('romEndInp2').style.border='2px solid #C62828'
+      document.getElementById('romEndInp2').focus()
+      return toast('Informe o endereço de entrega (Opção 2).','warn')
+    }
+    orcs[idx].entrega2=mod2
+    orcs[idx].dataEntrega2=(document.getElementById('romData2')||{}).value||''
+    orcs[idx].horaEntrega2=(document.getElementById('romHora2')||{}).value||''
+    if(mod2==='entrega')orcs[idx].endEntrega2=end2
+    else delete orcs[idx].endEntrega2
+  }else{
+    delete orcs[idx].entrega2
+    delete orcs[idx].dataEntrega2
+    delete orcs[idx].horaEntrega2
+    delete orcs[idx].endEntrega2
+  }
   DB.set(S.ORCAMENTOS,orcs)
   closeModal()
   renderRomTable()
@@ -4650,7 +4733,8 @@ async function imprimirRomaneio(id){
           if(o.pgto)r.push(cell('Pagamento',o.pgto))
           if(o.noivos)r.push(cell('Nome dos Noivos',o.noivos))
           if(o.dataEvento)r.push(cell('Data do Evento',fmtDate(o.dataEvento)))
-          if(o.endEntrega)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega}</div></div>`)
+          if(o.endEntrega)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega (Opção 1)</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega}</div></div>`)
+          if(o.entrega2){r.push(cell('Opção 2 — Modalidade',o.entrega2==='entrega'?'🚚 Laberna Dulce Entrega':'🏪 Cliente Retira'));if(o.dataEntrega2)r.push(cell('Opção 2 — Data',fmtDate(o.dataEntrega2)+(o.horaEntrega2?' às '+o.horaEntrega2:'')));if(o.endEntrega2)r.push(`<div style="flex-basis:100%;padding:11px 16px;background:#EEF4FF;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#1565C0;margin-bottom:5px;font-weight:700">🚚 Endereço de Entrega (Opção 2)</div><div style="font-size:14px;font-weight:700;color:#1565C0;line-height:1.3">${o.endEntrega2}</div></div>`)}
           return r.join('')
         })()}
       </div>
