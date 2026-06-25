@@ -4532,7 +4532,7 @@ async function imprimirRomaneio(id){
         let seq=2
         while(seq<100){
           const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!ss.exists)break
+          if(!ss.exists||ss.data()._purged)break
           const sd=ss.data()
           if(sd.retirada)allRet.push(sd.retirada)
           else if(sd.retiradas)allRet.push(...sd.retiradas)
@@ -4693,7 +4693,7 @@ async function verRetiradasRom(orcId){
     let seq=2
     while(seq<100){
       const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-      if(!seqSnap.exists)break
+      if(!seqSnap.exists||seqSnap.data()._purged)break
       const seqData=seqSnap.data()
       if(seqData.retirada)retiradas.push(seqData.retirada)
       else if(seqData.retiradas)retiradas.push(...seqData.retiradas)
@@ -4740,7 +4740,7 @@ async function anularRetiradasRom(orcId){
         let seq=2
         while(seq<100){
           const ss=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!ss.exists)break
+          if(!ss.exists||ss.data()._purged)break
           const sd=ss.data()
           if(sd.retirada)allRet.push(sd.retirada)
           else if(sd.retiradas)allRet.push(...sd.retiradas)
@@ -4771,7 +4771,7 @@ async function editarDocAssinado(orcId){
     let seq=2
     while(seq<100){
       const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-      if(!seqSnap.exists)break
+      if(!seqSnap.exists||seqSnap.data()._purged)break
       const seqData=seqSnap.data()
       if(seqData.retirada)allRet.push(seqData.retirada)
       else if(seqData.retiradas)allRet.push(...seqData.retiradas)
@@ -4848,7 +4848,7 @@ async function limparHistoricoRom(orcId){
     try{
       const baseId='rom'+orcId
       const allRet=[]
-      const refsToDelete=[]
+      const seqRefs=[]
       // Coleta docs principais
       const firstRef=_fdb.collection('assinaturas').doc(baseId)
       const firstSnap=await firstRef.get()
@@ -4856,16 +4856,15 @@ async function limparHistoricoRom(orcId){
       const fd=firstSnap.data()
       if(fd.retiradas)allRet.push(...fd.retiradas)
       else if(fd.retirada)allRet.push(fd.retirada)
-      refsToDelete.push(firstRef)
       let seq=2
       while(seq<100){
         const ref=_fdb.collection('assinaturas').doc(baseId+seq)
         const snap=await ref.get()
-        if(!snap.exists)break
+        if(!snap.exists||snap.data()._purged)break
         const sd=snap.data()
         if(sd.retirada)allRet.push(sd.retirada)
         else if(sd.retiradas)allRet.push(...sd.retiradas)
-        refsToDelete.push(ref)
+        seqRefs.push(ref)
         seq++
       }
       // Coleta cancelamentos individuais
@@ -4873,28 +4872,23 @@ async function limparHistoricoRom(orcId){
         _fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).get().catch(()=>({exists:false}))
       ))
       const cancelledIdxs=new Set()
-      ciSnaps.forEach((s,i)=>{
-        if(s.exists){
-          cancelledIdxs.add(i+1)
-          refsToDelete.push(_fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)))
-        }
-      })
+      ciSnaps.forEach((s,i)=>{if(s.exists&&!s.data()._cleared)cancelledIdxs.add(i+1)})
       // Cancelamento geral
       const cancelRef=_fdb.collection('assinaturas').doc('romcancel'+orcId)
       const cancelSnap=await cancelRef.get()
-      const cancelTime=cancelSnap.exists?cancelSnap.data().data:null
-      if(cancelSnap.exists)refsToDelete.push(cancelRef)
+      const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
       // Filtra válidas usando posições absolutas
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
-      // Deleta tudo
-      await Promise.all(refsToDelete.map(r=>r.delete()))
-      // Re-salva apenas as válidas em sequência compacta
-      if(validRet.length>0){
-        await firstRef.set({retiradas:[validRet[0]]})
-        for(let i=1;i<validRet.length;i++){
-          await _fdb.collection('assinaturas').doc(baseId+(i+1)).set({retirada:validRet[i],_seq:i+1,_orcId:orcId})
-        }
-      }
+      // Compacta: todos os válidos no doc1 (array), demais marcados como _purged
+      await firstRef.set({retiradas:validRet,_compactado:true})
+      // Marca docs sequenciais existentes como purged (sem deletar)
+      await Promise.all(seqRefs.map(r=>r.set({_purged:true})))
+      // Limpa romci docs (marca como _cleared)
+      await Promise.all(Array.from({length:allRet.length},(_,i)=>
+        _fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).set({_cleared:true})
+      ))
+      // Limpa romcancel
+      if(cancelSnap.exists)await cancelRef.set({_cleared:true})
       toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
       editarDocAssinado(orcId)
     }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
@@ -4905,7 +4899,7 @@ async function _getRomCancelados(orcId,max){
   if(!_fdb||!max)return new Set()
   try{
     const snaps=await Promise.all(Array.from({length:max},(_,i)=>_fdb.collection('assinaturas').doc('romci'+orcId+'_'+(i+1)).get().catch(()=>({exists:false}))))
-    return new Set(snaps.map((s,i)=>s.exists?i+1:null).filter(x=>x!==null))
+    return new Set(snaps.map((s,i)=>s.exists&&!s.data()._cleared?i+1:null).filter(x=>x!==null))
   }catch(e){return new Set()}
 }
 async function _addRomCancelado(orcId,idx){
@@ -5069,7 +5063,7 @@ function showRomaneioClientView(raw){
       if(!_fdb){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
       try{
         const cancelSnap=await _fdb.collection('assinaturas').doc('romcancel'+orcId).get()
-        const cancelTime=cancelSnap.exists?cancelSnap.data().data:null
+        const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
         const baseId='rom'+orcId
         const allRet=[]
         const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
@@ -5080,7 +5074,7 @@ function showRomaneioClientView(raw){
         let seq=2
         while(seq<100){
           const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
-          if(!seqSnap.exists)break
+          if(!seqSnap.exists||seqSnap.data()._purged)break
           const seqData=seqSnap.data()
           if(seqData.retirada)allRet.push(seqData.retirada)
           else if(seqData.retiradas)allRet.push(...seqData.retiradas)
@@ -5197,7 +5191,7 @@ async function confirmarRomaneioRecebimento(){
         while(seq<100){
           const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
           const nextSnap=await nextRef.get()
-          if(!nextSnap.exists){
+          if(!nextSnap.exists||nextSnap.data()._purged){
             await nextRef.set({retirada:novaRetirada,num,nome:nomeInp,data:isoNow,dataFmt:agora,_orcId:orcId,_seq:seq})
             _written=true;break
           }
