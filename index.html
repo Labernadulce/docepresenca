@@ -2242,11 +2242,11 @@ function openModal(title,body,footer,lg){
 }
 function closeModal(){document.getElementById('modalOv').classList.remove('open');pararGravacao()}
 function handleOvClick(e){if(e.target===document.getElementById('modalOv'))closeModal()}
-let _confirmCb=null
 function confirmarModal(msg,cb){
-  _confirmCb=cb
   openModal('Confirmação',`<p style="font-size:14px;color:var(--txt);line-height:1.6;padding:6px 0">${msg}</p>`,
-    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" style="background:var(--bad)" onclick="closeModal();if(_confirmCb){_confirmCb();_confirmCb=null}">Excluir</button>`)
+    `<button class="btn btn-s" id="cfmCancelBtn">Cancelar</button><button class="btn btn-p" style="background:var(--bad)" id="cfmDeleteBtn">Excluir</button>`)
+  document.getElementById('cfmCancelBtn').onclick=closeModal
+  document.getElementById('cfmDeleteBtn').onclick=function(){closeModal();if(cb)cb()}
 }
 
 // ===== TOAST =====
@@ -2456,8 +2456,8 @@ function salvarOS(id){
 }
 
 // ===== ROMANEIO =====
-const bdgROM={pendente:'bdg-y',conferido:'bdg-b',entregue:'bdg-g'}
-const lblROM={pendente:'Pendente',conferido:'Conferido',entregue:'Entregue'}
+const bdgROM={pendente:'bdg-y',conferido:'bdg-b',entregue:'bdg-g',cancelado:'bdg-r'}
+const lblROM={pendente:'Pendente',conferido:'Conferido',entregue:'Entregue',cancelado:'Cancelado'}
 
 function romaneioHTML(){
   return`
@@ -2469,7 +2469,7 @@ function romaneioHTML(){
     <div class="tbar">
       <div class="srch"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="srchRom" placeholder="Buscar cliente ou nº..." oninput="renderRomaneioTable()"></div>
       <select class="sel-filter" id="filtRom" onchange="renderRomaneioTable()">
-        <option value="">Todos</option><option value="pendente">Pendente</option><option value="conferido">Conferido</option><option value="entregue">Entregue</option>
+        <option value="">Ativos</option><option value="pendente">Pendente</option><option value="conferido">Conferido</option><option value="entregue">Entregue</option><option value="cancelado">Cancelado</option>
       </select>
     </div>
     <div class="tc" id="romaneioTable"></div>
@@ -2484,6 +2484,7 @@ function renderRomaneioTable(){
   let rows=DB.get(S.ROMANEIOS).sort((a,b)=>b.num-a.num)
   if(q)rows=rows.filter(r=>clienteNome(r.cliId).toLowerCase().includes(q.toLowerCase())||String(r.num).includes(q))
   if(f)rows=rows.filter(r=>r.status===f)
+  else rows=rows.filter(r=>r.status!=='cancelado')
   const el=document.getElementById('romaneioTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><svg width="40" height="40" fill="none" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/><path d="M7 9h10M7 13h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><h3>Nenhum romaneio</h3><p>Clique em <strong>+ Novo Romaneio</strong> ou gere a partir de uma venda</p></div>`;return}
   el.innerHTML=`<table><thead><tr><th>Nº</th><th>Cliente</th><th>Data</th><th>Entrega</th><th>Itens</th><th>Status</th><th></th></tr></thead><tbody>
@@ -2499,16 +2500,17 @@ function renderRomaneioTable(){
         <button class="btn-ic" style="margin-right:4px;background:#25D366;color:#fff;border-color:#25D366" title="Enviar Link ao Cliente" onclick="gerarLinkRomaneio('${r.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="btn-ic btn-d" title="Excluir" onclick="excluirRomaneio('${r.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <select onchange="updateStatusRom('${r.id}',this.value)" style="padding:4px 6px;border:1.5px solid var(--cream2);border-radius:6px;font-size:11px;font-family:inherit;outline:none;color:var(--txt);background:var(--cream)">
-          ${['pendente','conferido','entregue'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${lblROM[s]}</option>`).join('')}
+          ${['pendente','conferido','entregue','cancelado'].map(s=>`<option value="${s}" ${r.status===s?'selected':''}>${lblROM[s]}</option>`).join('')}
         </select>
       </td>
     </tr>`).join('')}
   </tbody></table>`
 }
 
+let _romUid=0
 function novoRomaneio(){
   const clis=DB.get(S.CLIENTES)
-  tempItems=[];editId=null
+  tempItems=[];editId=null;_romUid=0
   openModal('Novo Romaneio',`
     <div class="frow"><div class="fg"><label>Cliente</label><select id="roCli"><option value="">Selecione...</option>${clis.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
     <div class="fg"><label>Data</label><input type="date" id="roData" value="${today()}"></div></div>
@@ -2528,15 +2530,15 @@ function novoRomaneio(){
 function renderRomItens(){
   const el=document.getElementById('roItens');if(!el)return
   el.innerHTML=tempItems.map((it,i)=>`
-    <div style="display:flex;gap:6px;align-items:center">
+    <div style="display:flex;gap:6px;align-items:center" data-uid="${it._uid}">
       <input placeholder="Produto / Descrição" value="${(it.nome||'').replace(/"/g,'&quot;')}" oninput="tempItems[${i}].nome=this.value" style="flex:1;padding:7px 10px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt);background:var(--white)">
       <input type="number" placeholder="Qtd" value="${it.qtd||1}" min="1" oninput="tempItems[${i}].qtd=+this.value" style="width:70px;padding:7px 8px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt);background:var(--white)">
-      <button class="btn-ic btn-d" onclick="removeItemRomaneio(${i})" style="padding:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+      <button class="btn-ic btn-d" onclick="removeItemRomaneio(${it._uid})" style="padding:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
     </div>`).join('')
 }
 
-function addItemRomaneio(){tempItems.push({nome:'',qtd:1});renderRomItens()}
-function removeItemRomaneio(i){tempItems.splice(i,1);renderRomItens()}
+function addItemRomaneio(){tempItems.push({_uid:++_romUid,nome:'',qtd:1});renderRomItens()}
+function removeItemRomaneio(uid){tempItems=tempItems.filter(it=>it._uid!==uid);renderRomItens()}
 
 function salvarRomaneio(){
   const cliId=v('roCli');const data=v('roData')
