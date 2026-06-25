@@ -4799,10 +4799,19 @@ async function limparHistoricoRom(orcId){
       const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
       const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
-      if(!validRet.length)return toast('Nenhuma retirada válida para preservar — todas foram anuladas.','warn')
+      // Cria checkpoint mesmo se vazio — limpa visualmente os registros anulados
       await _fdb.collection('assinaturas').doc(newBaseId).set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
-      toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
-      editarDocAssinado(orcId)
+      if(validRet.length){
+        toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
+        editarDocAssinado(orcId)
+      }else{
+        // Remove badge pois não há retiradas ativas
+        const orcs=DB.get(S.ORCAMENTOS)||[]
+        const oi=orcs.findIndex(o=>o.id===orcId)
+        if(oi>=0){delete orcs[oi].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
+        render('romaneio')
+        toast('✅ Histórico limpo! Nenhuma retirada ativa — pode usar o link novamente.','ok')
+      }
     }catch(e){console.error(e);toast('Erro: '+e.message,'warn')}
   })
 }
