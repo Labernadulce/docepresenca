@@ -5608,7 +5608,7 @@ async function checkClientView(){
         const json=await _b64decompress(val.slice(2));data=JSON.parse(json)
       }else{
         let retries=0
-        while(!_fdb&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
+        while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
         if(!_fdb)throw new Error('Firebase indisponível')
         // tenta assinaturas (novo) e contratos_pub (legado) para compatibilidade
         let snap=await _fdb.collection('assinaturas').doc(val).get()
@@ -5630,7 +5630,7 @@ async function checkClientView(){
       } else {
         // ID curto: busca do Firestore
         let retries=0
-        while(!_fdb&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
+        while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
         if(!_fdb)throw new Error('Firebase indisponível')
         const snap=await _fdb.collection('contratos_pub').doc(val).get()
         if(!snap.exists)throw new Error('Contrato não encontrado')
@@ -6361,7 +6361,7 @@ const _FB_CFG={
   appId:'1:355799786526:web:3bf1f988bb0cda65ddfa0f'
 }
 const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos']
-let _fdb=null,_fbReady=false
+let _fdb=null,_fbReady=false,_fbAuthReady=false
 
 function _fbPanel(icon,msg,cor){
   const el=document.getElementById('puterPanel');if(!el)return
@@ -6375,6 +6375,7 @@ async function _fbInit(){
     _fdb=firebase.firestore()
     _fbPanel('↻','Conectando...','var(--cara2)')
     await firebase.auth().signInAnonymously()
+    _fbAuthReady=true
     _fbPanel('↻','Carregando dados...','var(--cara2)')
     const col=_fdb.collection('store')
     let updated=0
