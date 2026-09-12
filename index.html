@@ -397,7 +397,7 @@ const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',co
 const DB={get:k=>JSON.parse(localStorage.getItem(k)||'[]'),set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),clear:k=>localStorage.removeItem(k)}
 
 // ===== STATE =====
-let page='dashboard', tempItems=[], editId=null, tempAnexo=null, estoqueTab='produto', finTab='todos'
+let page='dashboard', tempItems=[], editId=null, tempAnexo=null, estoqueTab='produto', finTab='todos', romOrigem=false
 let tempAudioPrep=null, mediaRecorder=null, audioChunks=[], recordingTimer=null, recordingSec=0
 
 // ===== UTILS =====
@@ -1085,10 +1085,11 @@ function renderOrcTable(){
   </tbody></table>`
 }
 
-function novoOrc(){
+function novoOrc(fromRomaneio){
+  romOrigem=!!fromRomaneio
   tempItems=[{pId:'',nome:'',qtd:1,pu:0,sub:0}];editId=null
   const clis=DB.get(S.CLIENTES)
-  openModal('Novo Orçamento',`
+  openModal(fromRomaneio?'Novo Romaneio':'Novo Orçamento',`
     <div class="frow"><div class="fg"><label>Cliente</label><select id="oCli"><option value="">Selecione...</option>${clis.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
     <div class="fg"><label>Data</label><input type="date" id="oData" value="${today()}"></div></div>
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${new Date(Date.now()+30*86400000).toISOString().split('T')[0]}"></div>
@@ -1115,7 +1116,7 @@ function novoOrc(){
     </div>
     <div class="fg" id="oEndEntregaGrp" style="display:none"><label>Endereço de Entrega</label><input id="oEndEntrega" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento..."></textarea></div>`,
-    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">Salvar Orçamento</button>`,true)
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">${fromRomaneio?'Salvar Romaneio':'Salvar Orçamento'}</button>`,true)
   renderOItens();calcOrcTotals()
 }
 
@@ -1164,6 +1165,7 @@ function calcOrcTotals(){
 }
 function editOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
+  romOrigem=false
   editId=id;tempItems=JSON.parse(JSON.stringify(o.itens))
   const clis=DB.get(S.CLIENTES)
   openModal('Editar Orçamento',`
@@ -1219,10 +1221,11 @@ function salvarOrc(){
     if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
-    orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento salvo!','ok')
+    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:romOrigem?'aprovado':'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio criado!':'Orçamento salvo!','ok')
   }
-  render('orcamentos')
+  render(romOrigem?'romaneio':'orcamentos')
+  romOrigem=false
 }
 function statusOrc(id,status){
   const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id);if(i<0)return
@@ -4433,6 +4436,7 @@ function romaneioHTML(){
   return`
   <div class="ph">
     <div><h2>Romaneio de Entrega</h2><p>Controle e impressão de romaneios por orçamento</p></div>
+    <button class="btn btn-p" onclick="novoOrc(true)">+ Novo Romaneio</button>
   </div>
   <div class="card">
     <div class="tbar">
