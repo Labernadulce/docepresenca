@@ -1163,12 +1163,12 @@ function calcOrcTotals(){
   const el=document.getElementById('oTotals');if(!el)return
   el.innerHTML=`<div class="totbox"><div class="trow"><span>Subtotal</span><span>${fmt(total)}</span></div><div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(desc)}</span></div><div class="trow bold"><span>Total</span><span>${fmt(total-desc)}</span></div></div>`
 }
-function editOrc(id){
+function editOrc(id,fromRomaneio){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
-  romOrigem=false
+  romOrigem=!!fromRomaneio
   editId=id;tempItems=JSON.parse(JSON.stringify(o.itens))
   const clis=DB.get(S.CLIENTES)
-  openModal('Editar Orçamento',`
+  openModal(fromRomaneio?'Editar Romaneio':'Editar Orçamento',`
     <div class="frow"><div class="fg"><label>Cliente</label><select id="oCli"><option value="">Selecione...</option>${clis.map(c=>`<option value="${c.id}" ${c.id===o.cliId?'selected':''}>${c.nome}</option>`).join('')}</select></div>
     <div class="fg"><label>Data</label><input type="date" id="oData" value="${o.data}"></div></div>
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${o.validade||''}"></div>
@@ -1192,7 +1192,7 @@ function editOrc(id){
     </div>
     <div class="fg" id="oEndEntregaGrp" style="display:${o.entrega==='entrega'?'block':'none'}"><label>Endereço de Entrega</label><input id="oEndEntrega" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento...">${o.obs||''}</textarea></div>`,
-    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">Atualizar Orçamento</button>`,true)
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">${fromRomaneio?'Atualizar Romaneio':'Atualizar Orçamento'}</button>`,true)
   renderOItens();calcOrcTotals()
 }
 
@@ -1219,7 +1219,7 @@ function salvarOrc(){
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
     if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
-    DB.set(S.ORCAMENTOS,orcs);closeModal();toast('Orçamento atualizado!','ok')
+    DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio atualizado!':'Orçamento atualizado!','ok')
   }else{
     const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:romOrigem?'aprovado':'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio criado!':'Orçamento salvo!','ok')
@@ -4474,7 +4474,8 @@ function renderRomTable(){
     <td><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
     <td style="white-space:nowrap" onclick="event.stopPropagation()">
       <button class="btn-ic" style="color:#25D366" title="Enviar Link" onclick="gerarLinkRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      <button class="btn-ic" style="color:#7A6858;margin-left:4px" title="Editar Retiradas" onclick="editarDocAssinado('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn-ic" style="margin-left:4px" title="Editar Romaneio" onclick="editOrc('${o.id}',true)"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="btn-ic" style="color:#7A6858;margin-left:4px" title="Ver Retiradas" onclick="editarDocAssinado('${o.id}')">✍️</button>
       <button class="btn-ic" style="margin-left:4px" title="Imprimir" onclick="imprimirRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
     </td>
   </tr>`).join('')}
