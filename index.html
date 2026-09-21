@@ -1191,11 +1191,12 @@ function renderOItens(){
   const prods=DB.get(S.PRODUTOS).filter(p=>p.ativo)
   const itens=tempOpcoes[activeOpcaoIdx].itens
   el.innerHTML=itens.map((it,i)=>{
-    const _fotoProd=it.pId&&it.pId!=='_custom'?(prods.find(x=>x.id===it.pId)||{}).foto:null
+    const _fotoProduto=it.pId&&it.pId!=='_custom'?(prods.find(x=>x.id===it.pId)||{}).foto:null
+    const _fotoEfetiva=it.foto||_fotoProduto
     return`
     <div style="border-top:1px solid var(--cream2)">
-      <div style="display:grid;grid-template-columns:${_fotoProd?'30px ':''}3fr 1fr 1.5fr 1fr 36px;gap:6px;padding:8px 11px;align-items:center">
-        ${_fotoProd?`<img src="${_fotoProd.data}" onclick="verAnexo(${JSON.stringify(_fotoProd).replace(/"/g,'&quot;')})" style="width:28px;height:28px;border-radius:5px;object-fit:cover;cursor:pointer;flex-shrink:0" title="Ver foto">`:''}
+      <div style="display:grid;grid-template-columns:${_fotoEfetiva?'30px ':''}3fr 1fr 1.5fr 1fr 36px;gap:6px;padding:8px 11px;align-items:center">
+        ${_fotoEfetiva?`<img src="${_fotoEfetiva.data}" onclick="verAnexo(${JSON.stringify(_fotoEfetiva).replace(/"/g,'&quot;')})" style="width:28px;height:28px;border-radius:5px;object-fit:cover;cursor:pointer;flex-shrink:0" title="Ver foto">`:''}
         <select oninput="selectProdOrc(${i},this.value)" style="padding:5px 7px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt);width:100%">
           <option value="">Selecionar do estoque...</option>
           ${prods.map(p=>`<option value="${p.id}" ${it.pId===p.id?'selected':''}>${p.nome}${p.preco>0?' — '+fmt(p.preco):''}</option>`).join('')}
@@ -1208,8 +1209,28 @@ function renderOItens(){
       </div>
       ${it.pId==='_custom'?`<div style="padding:0 11px 4px"><input id="orc_nome_${i}" placeholder="Nome do item personalizado..." value="${it.nome||''}" oninput="tempOpcoes[${activeOpcaoIdx}].itens[${i}].nome=this.value" style="width:100%;padding:6px 10px;border:1.5px solid var(--cara);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt)"></div>`:''}
       <div style="padding:0 11px 8px"><input placeholder="Observação deste item..." value="${it.obs||''}" oninput="tempOpcoes[${activeOpcaoIdx}].itens[${i}].obs=this.value" style="width:100%;padding:5px 10px;border:1.5px solid var(--cream2);border-radius:6px;font-size:11px;font-family:inherit;outline:none;color:var(--txt3);background:var(--ivory)"></div>
+      <div style="padding:0 11px 8px">
+        <input type="file" id="itemFotoInput_${i}" accept="image/*" style="display:none" onchange="handleItemFoto(${i},this)">
+        ${it.foto
+          ?`<button type="button" onclick="removeItemFoto(${i})" style="font-size:10.5px;color:var(--txt3);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">✕ Remover foto desta opção (volta a usar a do produto)</button>`
+          :`<button type="button" onclick="document.getElementById('itemFotoInput_${i}').click()" style="font-size:10.5px;color:var(--cara);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">📷 Usar outra foto só nesta opção${_fotoProduto?'':' (este produto não tem foto cadastrada)'}</button>`}
+      </div>
     </div>`
   }).join('')
+}
+function handleItemFoto(i,input){
+  const file=input.files[0];if(!file)return
+  if(file.size>2*1024*1024){toast('Arquivo muito grande (máx. 2 MB)','err');input.value='';return}
+  const reader=new FileReader()
+  reader.onload=e=>{
+    tempOpcoes[activeOpcaoIdx].itens[i].foto={name:file.name,type:file.type,data:e.target.result}
+    renderOItens()
+  }
+  reader.readAsDataURL(file)
+}
+function removeItemFoto(i){
+  tempOpcoes[activeOpcaoIdx].itens[i].foto=null
+  renderOItens()
 }
 function selectProdOrc(i,pId){
   const prods=DB.get(S.PRODUTOS)
@@ -1416,7 +1437,7 @@ function verOrc(id){
     </div>
     ${(()=>{
       const _ps=DB.get(S.PRODUTOS);const _gn=i=>{if(!i.pId||i.pId==='_custom')return i.nome||'';const _p=_ps.find(x=>x.id===i.pId);return _p?_p.nome:(i.nome||'')}
-      const _gf=i=>{if(!i.pId||i.pId==='_custom')return'';const _p=_ps.find(x=>x.id===i.pId);return(_p&&_p.foto&&_p.foto.data)||''}
+      const _gf=i=>{if(i.foto&&i.foto.data)return i.foto.data;if(!i.pId||i.pId==='_custom')return'';const _p=_ps.find(x=>x.id===i.pId);return(_p&&_p.foto&&_p.foto.data)||''}
       const _tbl=(itens)=>`<div class="tc"><table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>
         ${itens.map(i=>{const _f=_gf(i);return`<tr><td>${_f?`<img src="${_f}" style="width:26px;height:26px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:6px">`:''}${_gn(i)}${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`}).join('')}
       </tbody></table></div>`
@@ -5505,7 +5526,7 @@ function imprimirOrc(id){
   const prods=DB.get(S.PRODUTOS)
   const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
   const getNomeProd=it=>{if(!it.pId||it.pId==='_custom')return it.nome||it.desc||'';const _p=prods.find(x=>x.id===it.pId);return _p?_p.nome:(it.nome||it.desc||'')}
-  const getFotoProd=it=>{if(!it.pId||it.pId==='_custom')return'';const _p=prods.find(x=>x.id===it.pId);return(_p&&_p.foto&&_p.foto.data)||''}
+  const getFotoProd=it=>{if(it.foto&&it.foto.data)return it.foto.data;if(!it.pId||it.pId==='_custom')return'';const _p=prods.find(x=>x.id===it.pId);return(_p&&_p.foto&&_p.foto.data)||''}
   const buildRows=itens=>{
     const cats=[...new Set(itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
     let num=0
@@ -5702,7 +5723,7 @@ async function gerarLinkOrc(id){
   const _prods=DB.get(S.PRODUTOS)
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
   const _gn=x=>{if(!x.pId||x.pId==='_custom')return x.nome||x.desc||'';const _p=_prods.find(p=>p.id===x.pId);return _p?_p.nome:(x.nome||x.desc||'')}
-  const _gf=x=>{if(!x.pId||x.pId==='_custom')return'';const _p=_prods.find(p=>p.id===x.pId);return(_p&&_p.foto&&_p.foto.data)||''}
+  const _gf=x=>{if(x.foto&&x.foto.data)return x.foto.data;if(!x.pId||x.pId==='_custom')return'';const _p=_prods.find(p=>p.id===x.pId);return(_p&&_p.foto&&_p.foto.data)||''}
   p.it=o.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x),x.obs||''])
   if(Array.isArray(o.opcoes)&&o.opcoes.length>1){
     p.op=o.opcoes.map(op=>({n:op.nome||'Opção',it:op.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x),x.obs||'']),t:op.total,tf:op.totalF}))
