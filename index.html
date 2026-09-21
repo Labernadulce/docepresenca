@@ -407,7 +407,7 @@ let tempAudioPrep=null, mediaRecorder=null, audioChunks=[], recordingTimer=null,
 
 // ===== UTILS =====
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-const ORC_NUM_BASE=12307 // primeiro orçamento (num 1) aparece como Nº 12308, e assim por diante
+const ORC_NUM_BASE=230807 // orçamento nº 3 (interno) aparece como Nº 230810, e assim por diante
 function orcNumFmt(o){
   if(o&&o.num)return String(ORC_NUM_BASE+o.num)
   const all=DB.get(S.ORCAMENTOS);const idx=all.findIndex(x=>x.id===o.id)
