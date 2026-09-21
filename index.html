@@ -1031,7 +1031,10 @@ function orcHTML(){
   return`
   <div class="ph">
     <div><h2>Orçamentos</h2><p>Propostas e cotações para clientes</p></div>
-    <button class="btn btn-p" onclick="novoOrc()">+ Novo Orçamento</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-s" onclick="verificarAprovacoesOrc()">🔔 Verificar Aprovações</button>
+      <button class="btn btn-p" onclick="novoOrc()">+ Novo Orçamento</button>
+    </div>
   </div>
   <div class="card">
     <div class="tbar">
@@ -1091,6 +1094,34 @@ function renderOrcTable(){
   </tbody></table>`
 }
 
+async function verificarAprovacoesOrc(){
+  if(!_fdb){toast('Firebase indisponível no momento.','err');return}
+  toast('Verificando aprovações...','ok')
+  try{
+    const snap=await _fdb.collection('orcamentos_pub').where('aprovado','==',true).get()
+    const orcs=DB.get(S.ORCAMENTOS)
+    const pendentes=[]
+    snap.forEach(doc=>{
+      const d=doc.data()
+      const local=orcs.find(o=>o.id===doc.id)
+      if(local&&local.status!=='aprovado')pendentes.push({id:doc.id,local,d})
+    })
+    if(!pendentes.length){toast('Nenhuma aprovação nova no momento.','ok');return}
+    openModal('🔔 Aprovações Recebidas',`
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${pendentes.map(p=>`<div style="padding:12px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2)">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${clienteNome(p.local.cliId)} — Orç. #${orcNumFmt(p.local)}</div>
+          <div style="font-size:12px;color:var(--txt2)">Assinado por <strong>${p.d.aprovadoPor||'—'}</strong>${p.d.opcaoNome?' — '+p.d.opcaoNome:''}${p.d.aprovadoEm?' em '+new Date(p.d.aprovadoEm).toLocaleString('pt-BR'):''}</div>
+          <button class="btn btn-p btn-sm" style="margin-top:8px" onclick="aplicarAprovacaoOrc('${p.id}')">✓ Aplicar aprovação</button>
+        </div>`).join('')}
+      </div>`,
+      `<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
+  }catch(err){console.error(err);toast('Erro ao verificar aprovações.','err')}
+}
+function aplicarAprovacaoOrc(id){
+  statusOrc(id,'aprovado')
+  if(_fdb)_fdb.collection('orcamentos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
+}
 function novoOrc(fromRomaneio){
   romOrigem=!!fromRomaneio
   tempOpcoes=[{nome:'Opção 1',itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]}];activeOpcaoIdx=0;editId=null
@@ -5675,10 +5706,10 @@ async function gerarLinkOrc(id){
     p.op=o.opcoes.map(op=>({n:op.nome||'Opção',it:op.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x)]),t:op.total,tf:op.totalF}))
   }
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
-  const _temFotos=p.it.some(x=>x[5])||(p.op||[]).some(op=>op.it.some(x=>x[5]))
   let longUrl=null,firestoreId=null
-  // Com fotos: tenta salvar no Firestore (link curto por id) - fotos em base64 deixam a URL grande demais pro metodo de compressao
-  if(_temFotos&&_fdb){
+  // Tenta sempre salvar no Firestore primeiro (link curto por id) - necessario pro cliente poder aprovar
+  // direto na pagina (grava a aprovacao no mesmo documento). Tambem evita URL gigante quando tem fotos.
+  if(_fdb){
     try{
       await _fdb.collection('orcamentos_pub').doc(o.id).set(JSON.parse(JSON.stringify(p)))
       firestoreId=o.id
@@ -5687,7 +5718,7 @@ async function gerarLinkOrc(id){
   if(firestoreId){
     longUrl=`${location.origin}${location.pathname}#orcview=${firestoreId}`
   }else{
-    // Sem fotos (ou Firestore indisponivel): remove fotos do payload e usa o metodo compactado na propria URL
+    // Firestore indisponivel: remove fotos do payload (ficariam grandes demais) e usa o metodo compactado na propria URL
     const pSemFoto=JSON.parse(JSON.stringify(p))
     pSemFoto.it=pSemFoto.it.map(x=>[x[0],x[1],x[2],x[3],x[4]])
     if(pSemFoto.op)pSemFoto.op=pSemFoto.op.map(op=>({...op,it:op.it.map(x=>[x[0],x[1],x[2],x[3],x[4]])}))
@@ -5774,26 +5805,26 @@ async function checkClientView(){
   if(!hash.startsWith('#orcview='))return
   try{
     const val=hash.slice(9)
-    let data
+    let data,docId=null
     if(val.startsWith('z.')){
       const json=await _b64decompress(val.slice(2))
       data=JSON.parse(json)
     }else if(val.length<=20&&/^[a-z0-9]+$/.test(val)){
-      // ID curto: orcamento com fotos, busca do Firestore
+      // ID curto: busca do Firestore (permite tambem aprovar direto na pagina)
       let retries=0
       while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
       if(!_fdb)throw new Error('Firebase indisponível')
       const snap=await _fdb.collection('orcamentos_pub').doc(val).get()
       if(!snap.exists)throw new Error('Orçamento não encontrado')
-      data=snap.data()
+      data=snap.data();docId=val
     }else{
       const b64=val.replace(/-/g,'+').replace(/_/g,'/');const pad=b64.length%4?'='.repeat(4-b64.length%4):''
       data=JSON.parse(decodeURIComponent(escape(atob(b64+pad))))
     }
-    showClientView(data)
+    showClientView(data,docId)
   }catch(err){console.error(err)}
 }
-function showClientView(raw){
+function showClientView(raw,docId){
   let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe
   if(raw.o){
     const {o,cli,e}=raw
@@ -5966,9 +5997,19 @@ function showClientView(raw){
         <div style="flex:1;min-width:140px;border-top:1px solid #C4B09A;padding-top:6px;font-size:12px;text-align:center;color:#6A5E52">Assinatura / Carimbo</div>
       </div>
 
+      ${docId?`
+      <div id="cvApprovalBox" style="margin-top:32px;padding:20px;border:2px solid #B8912A;border-radius:8px;background:#FBF3E4">
+        <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:10px">Aprovar Orçamento</div>
+        <p style="font-size:12px;color:#6A5E52;margin-bottom:12px">Digite seu nome completo abaixo como assinatura digital e confirme a aprovação — não precisa sair desta página.</p>
+        <input id="cvAssinNome" type="text" placeholder="Seu nome completo" style="width:100%;padding:11px 14px;border:1.5px solid #C4B09A;border-radius:6px;font-size:14px;font-family:inherit;color:#3D3028;box-sizing:border-box;margin-bottom:12px">
+        <button type="button" id="cvBtnAprovar" style="width:100%;padding:14px;border-radius:8px;background:#B8912A;color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar Aprovação</button>
+      </div>
+      <p style="font-size:11px;color:#9A8E82;margin:12px 0 4px">Prefere avisar por mensagem em vez de assinar aqui?</p>
+      `:''}
+
       <div class="cv-btns">
-        ${ew?`<button type="button" id="cvBtnWa" class="cv-btn" style="background:#25D366;color:#fff;border:none;cursor:pointer"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>Aprovar via WhatsApp</button>`:''}
-        ${ee?`<button type="button" id="cvBtnEmail" class="cv-btn" style="background:#7A6858;color:#fff;border:none;cursor:pointer"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#fff" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="#fff" stroke-width="2"/></svg>Aprovar via E-mail</button>`:''}
+        ${ew?`<button type="button" id="cvBtnWa" class="cv-btn" style="background:#25D366;color:#fff;border:none;cursor:pointer"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>${docId?'Avisar via WhatsApp':'Aprovar via WhatsApp'}</button>`:''}
+        ${ee?`<button type="button" id="cvBtnEmail" class="cv-btn" style="background:#7A6858;color:#fff;border:none;cursor:pointer"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#fff" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="#fff" stroke-width="2"/></svg>${docId?'Avisar via E-mail':'Aprovar via E-mail'}</button>`:''}
       </div>
     </div>
   </div>`
@@ -5984,6 +6025,30 @@ function showClientView(raw){
   if(_waBtn)_waBtn.onclick=()=>window.open('https://wa.me/'+ew.replace(/\D/g,'')+'?text='+encodeURIComponent(_approvalText()),'_blank')
   const _emailBtn=document.getElementById('cvBtnEmail')
   if(_emailBtn)_emailBtn.onclick=()=>{location.href='mailto:'+ee+'?subject='+encodeURIComponent('Aprovação Orçamento #'+oid)+'&body='+encodeURIComponent(_approvalText())}
+  if(docId){
+    const _aprovBtn=document.getElementById('cvBtnAprovar')
+    if(_aprovBtn)_aprovBtn.onclick=async()=>{
+      const nomeAssin=((document.getElementById('cvAssinNome')||{}).value||'').trim()
+      if(!nomeAssin){toast('Digite seu nome para aprovar.','err');return}
+      _aprovBtn.disabled=true;_aprovBtn.textContent='Enviando...'
+      try{
+        const sel=document.querySelector('input[name="cvOpcao"]:checked')
+        const opcaoEscolhida=_opcoes?(sel?Number(sel.value):0):null
+        const opcaoNome=_opcoes?_opcoes[opcaoEscolhida].nome:null
+        await _fdb.collection('orcamentos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome},{merge:true})
+        const _box=document.getElementById('cvApprovalBox')
+        if(_box)_box.innerHTML=`<div style="text-align:center;padding:8px 0">
+          <div style="font-size:34px;margin-bottom:8px">✅</div>
+          <div style="font-size:15px;font-weight:800;color:#2E7D32">Aprovação registrada!</div>
+          <div style="font-size:12px;color:#6A5E52;margin-top:4px">Obrigado, ${nomeAssin}. A confeitaria foi notificada.</div>
+        </div>`
+      }catch(err){
+        console.error(err)
+        _aprovBtn.disabled=false;_aprovBtn.textContent='✓ Confirmar Aprovação'
+        toast('Não foi possível registrar. Verifique sua internet e tente de novo, ou use o WhatsApp/E-mail abaixo.','err')
+      }
+    }
+  }
 }
 
 async function gerarLinkCont(id){
