@@ -1113,6 +1113,7 @@ async function verificarAprovacoesOrc(){
         ${pendentes.map(p=>`<div style="padding:12px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2)">
           <div style="font-weight:700;font-size:13px;margin-bottom:4px">${clienteNome(p.local.cliId)} — Orç. #${orcNumFmt(p.local)}</div>
           <div style="font-size:12px;color:var(--txt2)">Assinado por <strong>${p.d.aprovadoPor||'—'}</strong>${p.d.opcaoNome?' — '+p.d.opcaoNome:''}${p.d.aprovadoEm?' em '+new Date(p.d.aprovadoEm).toLocaleString('pt-BR'):''}</div>
+          ${p.d.assinaturaImg?`<img src="${p.d.assinaturaImg}" style="margin-top:8px;max-width:220px;height:60px;object-fit:contain;background:#fff;border:1px solid var(--cream2);border-radius:6px;display:block">`:''}
           <button class="btn btn-p btn-sm" style="margin-top:8px" onclick="aplicarAprovacaoOrc('${p.id}')">✓ Aplicar aprovação</button>
         </div>`).join('')}
       </div>`,
@@ -6016,9 +6017,15 @@ function showClientView(raw,docId){
       ${docId?`
       <div id="cvApprovalBox" style="margin-top:32px;padding:20px;border:2px solid #B8912A;border-radius:8px;background:#FBF3E4">
         <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:10px">Aprovar Orçamento</div>
-        <p style="font-size:12px;color:#6A5E52;margin-bottom:12px">Digite seu nome completo abaixo como assinatura digital e confirme a aprovação — não precisa sair desta página.</p>
+        <p style="font-size:12px;color:#6A5E52;margin-bottom:12px">Preencha seu nome, assine no quadro abaixo com o dedo (ou o mouse) e confirme — não precisa sair desta página.</p>
         <input id="cvAssinNome" type="text" placeholder="Seu nome completo" style="width:100%;padding:11px 14px;border:1.5px solid #C4B09A;border-radius:6px;font-size:14px;font-family:inherit;color:#3D3028;box-sizing:border-box;margin-bottom:12px">
-        <button type="button" id="cvBtnAprovar" style="width:100%;padding:14px;border-radius:8px;background:#B8912A;color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar Aprovação</button>
+        <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9A8E82;margin-bottom:6px">Assinatura</div>
+        <div style="position:relative;border:1.5px solid #C4B09A;border-radius:6px;background:#fff;overflow:hidden">
+          <canvas id="cvSignCanvas" style="width:100%;height:150px;display:block;cursor:crosshair;touch-action:none"></canvas>
+          <div id="cvSignPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C4B09A;font-size:13px;pointer-events:none">Assine aqui</div>
+        </div>
+        <button type="button" id="cvBtnLimparAssin" style="margin-top:6px;background:none;border:none;color:#B8912A;font-size:11px;text-decoration:underline;cursor:pointer;padding:0">Limpar assinatura</button>
+        <button type="button" id="cvBtnAprovar" style="width:100%;margin-top:14px;padding:14px;border-radius:8px;background:#B8912A;color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer">✓ Confirmar Aprovação</button>
       </div>
       <p style="font-size:11px;color:#9A8E82;margin:12px 0 4px">Prefere avisar por mensagem em vez de assinar aqui?</p>
       `:''}
@@ -6042,16 +6049,37 @@ function showClientView(raw,docId){
   const _emailBtn=document.getElementById('cvBtnEmail')
   if(_emailBtn)_emailBtn.onclick=()=>{location.href='mailto:'+ee+'?subject='+encodeURIComponent('Aprovação Orçamento #'+oid)+'&body='+encodeURIComponent(_approvalText())}
   if(docId){
+    // Quadro de assinatura desenhada (mouse ou dedo, via Pointer Events)
+    const _signCanvas=document.getElementById('cvSignCanvas')
+    let _signHasDrawn=false,_signCtx=null
+    if(_signCanvas){
+      _signCtx=_signCanvas.getContext('2d')
+      const _dpr=window.devicePixelRatio||1
+      const _rect=_signCanvas.getBoundingClientRect()
+      _signCanvas.width=_rect.width*_dpr;_signCanvas.height=_rect.height*_dpr
+      _signCtx.scale(_dpr,_dpr)
+      _signCtx.lineWidth=2.4;_signCtx.lineCap='round';_signCtx.lineJoin='round';_signCtx.strokeStyle='#3D3028'
+      let _drawing=false,_lastX=0,_lastY=0
+      const _placeholder=document.getElementById('cvSignPlaceholder')
+      const _posOf=e=>{const r=_signCanvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+      _signCanvas.addEventListener('pointerdown',e=>{_drawing=true;_signHasDrawn=true;if(_placeholder)_placeholder.style.display='none';const p=_posOf(e);_lastX=p.x;_lastY=p.y;e.preventDefault()})
+      _signCanvas.addEventListener('pointermove',e=>{if(!_drawing)return;const p=_posOf(e);_signCtx.beginPath();_signCtx.moveTo(_lastX,_lastY);_signCtx.lineTo(p.x,p.y);_signCtx.stroke();_lastX=p.x;_lastY=p.y;e.preventDefault()})
+      window.addEventListener('pointerup',()=>{_drawing=false})
+      const _clearBtn=document.getElementById('cvBtnLimparAssin')
+      if(_clearBtn)_clearBtn.onclick=()=>{_signCtx.clearRect(0,0,_signCanvas.width,_signCanvas.height);_signHasDrawn=false;if(_placeholder)_placeholder.style.display='flex'}
+    }
     const _aprovBtn=document.getElementById('cvBtnAprovar')
     if(_aprovBtn)_aprovBtn.onclick=async()=>{
       const nomeAssin=((document.getElementById('cvAssinNome')||{}).value||'').trim()
       if(!nomeAssin){toast('Digite seu nome para aprovar.','err');return}
+      if(_signCanvas&&!_signHasDrawn){toast('Assine no quadro antes de confirmar.','err');return}
       _aprovBtn.disabled=true;_aprovBtn.textContent='Enviando...'
       try{
         const sel=document.querySelector('input[name="cvOpcao"]:checked')
         const opcaoEscolhida=_opcoes?(sel?Number(sel.value):0):null
         const opcaoNome=_opcoes?_opcoes[opcaoEscolhida].nome:null
-        await _fdb.collection('contratos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome},{merge:true})
+        const assinaturaImg=_signCanvas?_signCanvas.toDataURL('image/png'):null
+        await _fdb.collection('contratos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome,assinaturaImg},{merge:true})
         const _box=document.getElementById('cvApprovalBox')
         if(_box)_box.innerHTML=`<div style="text-align:center;padding:8px 0">
           <div style="font-size:34px;margin-bottom:8px">✅</div>
