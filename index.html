@@ -407,7 +407,12 @@ let tempAudioPrep=null, mediaRecorder=null, audioChunks=[], recordingTimer=null,
 
 // ===== UTILS =====
 function genId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
-function orcNumFmt(o){if(o&&o.num)return String(o.num).padStart(3,'0');const all=DB.get(S.ORCAMENTOS);const idx=all.findIndex(x=>x.id===o.id);return idx>=0?String(idx+1).padStart(3,'0'):'001'}
+const ORC_NUM_BASE=12307 // primeiro orçamento (num 1) aparece como Nº 12308, e assim por diante
+function orcNumFmt(o){
+  if(o&&o.num)return String(ORC_NUM_BASE+o.num)
+  const all=DB.get(S.ORCAMENTOS);const idx=all.findIndex(x=>x.id===o.id)
+  return String(ORC_NUM_BASE+(idx>=0?idx+1:1))
+}
 function fmt(n){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(n||0)}
 const _PGTOS_DEFAULT=['A combinar','Pix','Dinheiro','Cartão de Crédito','Cartão de Débito','Transferência','50% entrada + 50% entrega','Parcelado']
 function getPgtos(){const custom=DB.get(S.PGTOS);return(Array.isArray(custom)&&custom.length)?custom:_PGTOS_DEFAULT}
@@ -1426,7 +1431,7 @@ function confirmarGerarVendaDeOrc(orcId){
 }
 function excluirOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
-  confirmarModal(`Deseja excluir o <strong>Orçamento #${String(o.num||'').padStart(3,'0')}</strong>?<br><small style="color:var(--txt3)">Esta ação não pode ser desfeita.</small>`,()=>{
+  confirmarModal(`Deseja excluir o <strong>Orçamento #${orcNumFmt(o)}</strong>?<br><small style="color:var(--txt3)">Esta ação não pode ser desfeita.</small>`,()=>{
     DB.set(S.ORCAMENTOS,DB.get(S.ORCAMENTOS).filter(x=>x.id!==id))
     toast('Orçamento excluído','ok');render('orcamentos')
   })
