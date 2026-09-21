@@ -5874,6 +5874,7 @@ function showClientView(raw,docId){
   // Opções alternativas (pacotes) — se o orçamento tiver mais de uma proposta pro cliente escolher
   const _opcaoItem=x=>Array.isArray(x)?{n:x[0],q:x[1],pu:x[2]||0,s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''}:{n:x.n,q:x.q,pu:x.pu||0,s:x.s,c:x.c||'Outros',foto:x.f||'',obs:x.o||''}
   const _opcoes=(Array.isArray(raw.op)&&raw.op.length>1)?raw.op.map(o=>({nome:o.n||'Opção',itens:(o.it||[]).map(_opcaoItem),total:o.t,totalF:o.tf})):null
+  const _jaAprovado=!!(docId&&raw.aprovado===true)
   // Info cards — mesma lógica do imprimirOrc
   const _infoCell=(lbl,val)=>`<div style="flex:1;min-width:150px;padding:11px 16px;background:#FAF7F4;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#9A8E82;margin-bottom:5px;font-weight:700">${lbl}</div><div style="font-size:13px;font-weight:700;color:#3D3028;line-height:1.3">${val}</div></div>`
   const _infoCells=[]
@@ -6014,7 +6015,19 @@ function showClientView(raw,docId){
         <div style="flex:1;min-width:140px;border-top:1px solid #C4B09A;padding-top:6px;font-size:12px;text-align:center;color:#6A5E52">Assinatura / Carimbo</div>
       </div>
 
-      ${docId?`
+      ${docId&&_jaAprovado?`
+      <div id="cvApprovalBox" style="margin-top:32px;padding:24px;border:2px solid #2E7D32;border-radius:8px;background:#EFF9F0;text-align:center">
+        <div style="font-size:38px;margin-bottom:8px">✅</div>
+        <div style="font-size:16px;font-weight:800;color:#2E7D32;margin-bottom:6px">Este orçamento já foi aprovado</div>
+        <div style="font-size:13px;color:#3D3028;margin-bottom:2px">Assinado por <strong>${raw.aprovadoPor||'—'}</strong>${raw.opcaoNome?' — '+raw.opcaoNome:''}</div>
+        ${raw.aprovadoEm?`<div style="font-size:11px;color:#6A5E52;margin-bottom:14px">em ${new Date(raw.aprovadoEm).toLocaleString('pt-BR')}</div>`:''}
+        ${raw.assinaturaImg?`<img src="${raw.assinaturaImg}" style="max-width:220px;height:60px;object-fit:contain;background:#fff;border:1px solid #C4B09A;border-radius:6px;margin:0 auto 16px;display:block">`:''}
+        <p style="font-size:12px;color:#6A5E52;margin-bottom:14px">Não é possível aprovar de novo por esta página. Ficou com alguma dúvida?</p>
+        ${ew?`<button type="button" id="cvBtnDuvidaWa" style="width:100%;padding:13px;border-radius:8px;background:#25D366;color:#fff;border:none;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px"><svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>Falar no WhatsApp</button>`:''}
+      </div>
+      `:''}
+
+      ${docId&&!_jaAprovado?`
       <div id="cvApprovalBox" style="margin-top:32px;padding:20px;border:2px solid #B8912A;border-radius:8px;background:#FBF3E4">
         <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:10px">Aprovar Orçamento</div>
         <p style="font-size:12px;color:#6A5E52;margin-bottom:12px">Preencha seu nome, assine no quadro abaixo com o dedo (ou o mouse) e confirme — não precisa sair desta página.</p>
@@ -6030,10 +6043,10 @@ function showClientView(raw,docId){
       <p style="font-size:11px;color:#9A8E82;margin:12px 0 4px">Prefere avisar por mensagem em vez de assinar aqui?</p>
       `:''}
 
-      <div class="cv-btns">
+      ${!_jaAprovado?`<div class="cv-btns">
         ${ew?`<button type="button" id="cvBtnWa" class="cv-btn" style="background:#25D366;color:#fff;border:none;cursor:pointer"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>${docId?'Avisar via WhatsApp':'Aprovar via WhatsApp'}</button>`:''}
         ${ee?`<button type="button" id="cvBtnEmail" class="cv-btn" style="background:#7A6858;color:#fff;border:none;cursor:pointer"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#fff" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="#fff" stroke-width="2"/></svg>${docId?'Avisar via E-mail':'Aprovar via E-mail'}</button>`:''}
-      </div>
+      </div>`:''}
     </div>
   </div>`
   const _approvalText=()=>{
@@ -6046,6 +6059,8 @@ function showClientView(raw,docId){
   }
   const _waBtn=document.getElementById('cvBtnWa')
   if(_waBtn)_waBtn.onclick=()=>window.open('https://wa.me/'+ew.replace(/\D/g,'')+'?text='+encodeURIComponent(_approvalText()),'_blank')
+  const _duvidaBtn=document.getElementById('cvBtnDuvidaWa')
+  if(_duvidaBtn)_duvidaBtn.onclick=()=>window.open('https://wa.me/'+ew.replace(/\D/g,'')+'?text='+encodeURIComponent('Olá! Tenho uma dúvida sobre o orçamento #'+oid+'.'),'_blank')
   const _emailBtn=document.getElementById('cvBtnEmail')
   if(_emailBtn)_emailBtn.onclick=()=>{location.href='mailto:'+ee+'?subject='+encodeURIComponent('Aprovação Orçamento #'+oid)+'&body='+encodeURIComponent(_approvalText())}
   if(docId){
