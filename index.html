@@ -6311,6 +6311,7 @@ function relHTML(){
   <div class="tabs" id="relTabs">
     <div class="tab active" onclick="setRelTab('vendas',this)">Vendas</div>
     <div class="tab" onclick="setRelTab('financeiro',this)">Financeiro</div>
+    <div class="tab" onclick="setRelTab('dre',this)">DRE</div>
     <div class="tab" onclick="setRelTab('produtos',this)">Produtos</div>
     <div class="tab" onclick="setRelTab('clientes',this)">Clientes</div>
   </div>
@@ -6336,6 +6337,7 @@ function renderRelatorio(){
   const el=document.getElementById('relContent');if(!el)return
   if(relTab==='vendas')el.innerHTML=relVendasHTML(de,ate)
   else if(relTab==='financeiro')el.innerHTML=relFinHTML(de,ate)
+  else if(relTab==='dre')el.innerHTML=relDreHTML(de,ate)
   else if(relTab==='produtos')el.innerHTML=relProdHTML(de,ate)
   else el.innerHTML=relCliHTML(de,ate)
 }
@@ -6382,6 +6384,79 @@ function relFinHTML(de,ate){
       <td style="font-weight:700;color:${v.e-v.s>=0?'var(--ok)':'var(--bad)'}">${fmt(v.e-v.s)}</td>
     </tr>`).join('')}
   </tbody></table></div></div>`
+}
+function calcDre(de,ate){
+  const vs=DB.get(S.VENDAS).filter(v=>v.data>=de&&v.data<=ate)
+  const prods=DB.get(S.PRODUTOS)
+  const receitaBruta=vs.reduce((a,v)=>a+v.totalF,0)
+  let cmv=0,itensSemCusto=0
+  vs.forEach(v=>(v.itens||[]).forEach(it=>{
+    if(it.pId&&it.pId!=='_custom'){
+      const p=prods.find(x=>x.id===it.pId)
+      if(p&&p.custo>0){cmv+=p.custo*(parseFloat(it.qtd)||0);return}
+    }
+    itensSemCusto++
+  }))
+  const lucroBruto=receitaBruta-cmv
+  const ts=DB.get(S.TRANS).filter(t=>t.data>=de&&t.data<=ate&&t.tipo==='saida'&&t.cat!=='Compra de insumos')
+  const despCats={}
+  ts.forEach(t=>{despCats[t.cat]=(despCats[t.cat]||0)+t.val})
+  const despTotal=ts.reduce((a,t)=>a+t.val,0)
+  const resultado=lucroBruto-despTotal
+  return{receitaBruta,cmv,itensSemCusto,lucroBruto,despCats,despTotal,resultado}
+}
+function relDreHTML(de,ate){
+  const{receitaBruta,cmv,itensSemCusto,lucroBruto,despCats,despTotal,resultado}=calcDre(de,ate)
+  const margemBruta=receitaBruta>0?(lucroBruto/receitaBruta*100):0
+  const margemLiquida=receitaBruta>0?(resultado/receitaBruta*100):0
+  const row=(lbl,val,o={})=>`<div style="display:flex;justify-content:space-between;padding:${o.indent?'6px 0 6px 16px':'10px 0'};${o.border?'border-top:1.5px solid var(--cream2);margin-top:2px':''}">
+    <span style="font-weight:${o.bold?800:o.indent?400:600};color:${o.indent?'var(--txt3)':'var(--txt)'};font-size:${o.indent?'12px':'13.5px'}">${lbl}</span>
+    <span style="font-weight:${o.bold?800:600};color:${o.color||(val<0?'var(--bad)':'var(--txt)')};font-size:${o.indent?'12px':'13.5px'}">${val<0?'- ':''}${fmt(Math.abs(val))}</span>
+  </div>`
+  return`
+  <div class="stats-grid" style="margin-bottom:16px">
+    <div class="stat g"><div class="stat-lbl">Receita Bruta</div><div class="stat-val">${fmt(receitaBruta)}</div></div>
+    <div class="stat b"><div class="stat-lbl">Lucro Bruto</div><div class="stat-val">${fmt(lucroBruto)}</div><div class="stat-sub">margem ${margemBruta.toFixed(1)}%</div></div>
+    <div class="stat ${resultado>=0?'g':'r'}"><div class="stat-lbl">Resultado Líquido</div><div class="stat-val" style="color:${resultado>=0?'var(--ok)':'var(--bad)'}">${fmt(resultado)}</div><div class="stat-sub">margem ${margemLiquida.toFixed(1)}%</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">DRE — Demonstrativo de Resultado (${fmtDate(de)} a ${fmtDate(ate)})</div>
+    <div style="max-width:540px">
+      ${row('Receita Bruta de Vendas',receitaBruta,{bold:true})}
+      ${row('(-) CMV — Custo das Mercadorias Vendidas',-cmv,{border:true})}
+      ${row('(=) Lucro Bruto',lucroBruto,{bold:true,border:true,color:lucroBruto>=0?'var(--ok)':'var(--bad)'})}
+      ${row('(-) Despesas Operacionais',-despTotal,{border:true})}
+      ${Object.entries(despCats).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>row(cat,-val,{indent:true})).join('')}
+      ${row('(=) Resultado Líquido do Período',resultado,{bold:true,border:true,color:resultado>=0?'var(--ok)':'var(--bad)'})}
+    </div>
+    ${itensSemCusto>0?`<p style="margin-top:14px;font-size:11.5px;color:var(--txt3)">⚠️ ${itensSemCusto} item(ns) vendido(s) sem custo cadastrado no estoque — o CMV pode estar subestimado. Cadastre o custo dos produtos em Estoque pra um DRE mais preciso.</p>`:''}
+    <p style="margin-top:8px;font-size:11px;color:var(--txt3)">"Compra de insumos" não entra nas despesas operacionais pra não contar duas vezes — já está embutida no CMV pelo custo cadastrado de cada produto vendido.</p>
+    <button class="btn btn-s" style="margin-top:14px" onclick="imprimirDre()">Imprimir DRE</button>
+  </div>`
+}
+function imprimirDre(){
+  const{de,ate}=getRelDatas()
+  const{receitaBruta,cmv,lucroBruto,despCats,despTotal,resultado}=calcDre(de,ate)
+  const linha=(lbl,val,bold)=>`<tr><td style="padding:9px 12px;${bold?'font-weight:700':''}">${lbl}</td><td class="r" style="padding:9px 12px;${bold?'font-weight:700':''}">${val<0?'(':''}${fmt(Math.abs(val))}${val<0?')':''}</td></tr>`
+  const w=window.open('','_blank','width=900,height=700')
+  w.document.write(docHead('DRE')+
+    `<div class="doc-title-row">
+      <div class="doc-title-num">DEMONSTRATIVO DE RESULTADO (DRE)</div>
+      <div class="doc-title-date">${fmtDate(de)} a ${fmtDate(ate)}</div>
+    </div>
+    <table class="prod-table" style="margin-top:16px">
+      <tbody>
+        ${linha('Receita Bruta de Vendas',receitaBruta,true)}
+        ${linha('(-) CMV — Custo das Mercadorias Vendidas',-cmv)}
+        ${linha('(=) Lucro Bruto',lucroBruto,true)}
+        ${linha('(-) Despesas Operacionais',-despTotal)}
+        ${Object.entries(despCats).sort((a,b)=>b[1]-a[1]).map(([cat,val])=>linha('&nbsp;&nbsp;&nbsp;&nbsp;'+cat,-val)).join('')}
+        ${linha('(=) RESULTADO LÍQUIDO DO PERÍODO',resultado,true)}
+      </tbody>
+    </table>
+    <p style="margin-top:16px;font-size:11px;color:#9A8E82">DRE gerencial simplificado, não substitui a apuração contábil/fiscal oficial. Compras de insumos não entram nas despesas operacionais (já refletidas no CMV pelo custo do produto vendido).</p>`
+    +docFoot('',false))
+  w.document.close();setTimeout(()=>w.print(),400)
 }
 function relProdHTML(de,ate){
   const vs=DB.get(S.VENDAS).filter(v=>v.data>=de&&v.data<=ate)
