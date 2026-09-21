@@ -1098,11 +1098,12 @@ async function verificarAprovacoesOrc(){
   if(!_fdb){toast('Firebase indisponível no momento.','err');return}
   toast('Verificando aprovações...','ok')
   try{
-    const snap=await _fdb.collection('orcamentos_pub').where('aprovado','==',true).get()
+    const snap=await _fdb.collection('contratos_pub').where('aprovado','==',true).get()
     const orcs=DB.get(S.ORCAMENTOS)
     const pendentes=[]
     snap.forEach(doc=>{
       const d=doc.data()
+      if(d.tp!=='orc')return
       const local=orcs.find(o=>o.id===doc.id)
       if(local&&local.status!=='aprovado')pendentes.push({id:doc.id,local,d})
     })
@@ -1120,7 +1121,7 @@ async function verificarAprovacoesOrc(){
 }
 function aplicarAprovacaoOrc(id){
   statusOrc(id,'aprovado')
-  if(_fdb)_fdb.collection('orcamentos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
+  if(_fdb)_fdb.collection('contratos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
 }
 function novoOrc(fromRomaneio){
   romOrigem=!!fromRomaneio
@@ -5681,7 +5682,7 @@ async function gerarLinkOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
   const e=getEmpresa()
-  const p={}
+  const p={tp:'orc'}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
   if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa
@@ -5709,19 +5710,23 @@ async function gerarLinkOrc(id){
   let longUrl=null,firestoreId=null
   // Tenta sempre salvar no Firestore primeiro (link curto por id) - necessario pro cliente poder aprovar
   // direto na pagina (grava a aprovacao no mesmo documento). Tambem evita URL gigante quando tem fotos.
-  if(_fdb){
+  // Precisa esperar o login anonimo terminar (_fbAuthReady) - sem isso a gravacao e rejeitada por permissao
+  // (mesmo padrao de espera ja usado em checkClientView pra leitura).
+  let _authRetries=0
+  while(!_fbAuthReady&&_authRetries<30){await new Promise(r=>setTimeout(r,300));_authRetries++}
+  if(_fdb&&_fbAuthReady){
     try{
-      await _fdb.collection('orcamentos_pub').doc(o.id).set(JSON.parse(JSON.stringify(p)))
+      await _fdb.collection('contratos_pub').doc(o.id).set(JSON.parse(JSON.stringify(p)))
       firestoreId=o.id
     }catch(err){console.warn('orcamentos_pub write:',err)}
   }
   if(firestoreId){
     longUrl=`${location.origin}${location.pathname}#orcview=${firestoreId}`
   }else{
-    // Firestore indisponivel: remove fotos do payload (ficariam grandes demais) e usa o metodo compactado na propria URL
+    // Firestore indisponivel: remove só as fotos do payload (ficariam grandes demais), mantém o resto (obs etc.), e usa o metodo compactado na propria URL
     const pSemFoto=JSON.parse(JSON.stringify(p))
-    pSemFoto.it=pSemFoto.it.map(x=>[x[0],x[1],x[2],x[3],x[4]])
-    if(pSemFoto.op)pSemFoto.op=pSemFoto.op.map(op=>({...op,it:op.it.map(x=>[x[0],x[1],x[2],x[3],x[4]])}))
+    pSemFoto.it=pSemFoto.it.map(x=>[x[0],x[1],x[2],x[3],x[4],'',x[6]||''])
+    if(pSemFoto.op)pSemFoto.op=pSemFoto.op.map(op=>({...op,it:op.it.map(x=>[x[0],x[1],x[2],x[3],x[4],'',x[6]||''])}))
     const json=JSON.stringify(pSemFoto)
     const compressed=await _b64compress(json)
     const encoded=compressed?'z.'+compressed:btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'')
@@ -5814,7 +5819,7 @@ async function checkClientView(){
       let retries=0
       while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
       if(!_fdb)throw new Error('Firebase indisponível')
-      const snap=await _fdb.collection('orcamentos_pub').doc(val).get()
+      const snap=await _fdb.collection('contratos_pub').doc(val).get()
       if(!snap.exists)throw new Error('Orçamento não encontrado')
       data=snap.data();docId=val
     }else{
@@ -6035,7 +6040,7 @@ function showClientView(raw,docId){
         const sel=document.querySelector('input[name="cvOpcao"]:checked')
         const opcaoEscolhida=_opcoes?(sel?Number(sel.value):0):null
         const opcaoNome=_opcoes?_opcoes[opcaoEscolhida].nome:null
-        await _fdb.collection('orcamentos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome},{merge:true})
+        await _fdb.collection('contratos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome},{merge:true})
         const _box=document.getElementById('cvApprovalBox')
         if(_box)_box.innerHTML=`<div style="text-align:center;padding:8px 0">
           <div style="font-size:34px;margin-bottom:8px">✅</div>
