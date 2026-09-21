@@ -5718,7 +5718,7 @@ async function gerarLinkOrc(id){
     try{
       await _fdb.collection('contratos_pub').doc(o.id).set(JSON.parse(JSON.stringify(p)))
       firestoreId=o.id
-    }catch(err){console.warn('orcamentos_pub write:',err)}
+    }catch(err){console.warn('contratos_pub write (orcamento):',err)}
   }
   if(firestoreId){
     longUrl=`${location.origin}${location.pathname}#orcview=${firestoreId}`
