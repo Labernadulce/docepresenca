@@ -5701,9 +5701,9 @@ async function gerarLinkOrc(id){
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
   const _gn=x=>{if(!x.pId||x.pId==='_custom')return x.nome||x.desc||'';const _p=_prods.find(p=>p.id===x.pId);return _p?_p.nome:(x.nome||x.desc||'')}
   const _gf=x=>{if(!x.pId||x.pId==='_custom')return'';const _p=_prods.find(p=>p.id===x.pId);return(_p&&_p.foto&&_p.foto.data)||''}
-  p.it=o.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x)])
+  p.it=o.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x),x.obs||''])
   if(Array.isArray(o.opcoes)&&o.opcoes.length>1){
-    p.op=o.opcoes.map(op=>({n:op.nome||'Opção',it:op.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x)]),t:op.total,tf:op.totalF}))
+    p.op=o.opcoes.map(op=>({n:op.nome||'Opção',it:op.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId),_gf(x),x.obs||'']),t:op.total,tf:op.totalF}))
   }
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
   let longUrl=null,firestoreId=null
@@ -5836,7 +5836,7 @@ function showClientView(raw,docId){
     nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
     nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||''
-    itens=(raw.it||[]).map(x=>{if(!Array.isArray(x))return x;return x.length>=5?{n:x[0],q:x[1],pu:x[2],s:x[3],c:x[4]||'Outros',foto:x[5]||''}:{n:x[0],q:x[1],pu:0,s:x[2],c:x[3]||'Outros'}})
+    itens=(raw.it||[]).map(x=>{if(!Array.isArray(x))return x;return x.length>=5?{n:x[0],q:x[1],pu:x[2],s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''}:{n:x[0],q:x[1],pu:0,s:x[2],c:x[3]||'Outros'}})
     clinome=raw.cn||'';clifone=raw.cf||''
   }
   // Agrupar por categoria — mesma lógica do imprimirOrc
@@ -5847,7 +5847,7 @@ function showClientView(raw,docId){
       `<tr><td colspan="4" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
       ...its.filter(it=>(it.c||'Outros')===cat).map(it=>{_n++;return`<tr style="${_n%2===0?'background:#FAF7F4':''}">
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#9A8E82;font-weight:700;font-size:11px">${_n}</td>
-        <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.foto?`<img src="${it.foto}" style="width:34px;height:34px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${it.n||''}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.foto?`<img src="${it.foto}" style="width:34px;height:34px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${it.n||''}${it.obs?`<br><span style="font-size:10.5px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#3D3028">${it.q}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;color:#3D3028">${fmt(it.pu||it.s/(it.q||1))}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;font-weight:600;color:#3D3028">${fmt(it.s)}</td>
@@ -5856,7 +5856,7 @@ function showClientView(raw,docId){
   }
   const _rows=_buildRowsHtml(itens)
   // Opções alternativas (pacotes) — se o orçamento tiver mais de uma proposta pro cliente escolher
-  const _opcoes=(Array.isArray(raw.op)&&raw.op.length>1)?raw.op.map(o=>({nome:o.n||'Opção',itens:(o.it||[]).map(x=>({n:x[0],q:x[1],pu:x[2]||0,s:x[3],c:x[4]||'Outros',foto:x[5]||''})),total:o.t,totalF:o.tf})):null
+  const _opcoes=(Array.isArray(raw.op)&&raw.op.length>1)?raw.op.map(o=>({nome:o.n||'Opção',itens:(o.it||[]).map(x=>({n:x[0],q:x[1],pu:x[2]||0,s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''})),total:o.t,totalF:o.tf})):null
   // Info cards — mesma lógica do imprimirOrc
   const _infoCell=(lbl,val)=>`<div style="flex:1;min-width:150px;padding:11px 16px;background:#FAF7F4;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#9A8E82;margin-bottom:5px;font-weight:700">${lbl}</div><div style="font-size:13px;font-weight:700;color:#3D3028;line-height:1.3">${val}</div></div>`
   const _infoCells=[]
