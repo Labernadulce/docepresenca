@@ -398,6 +398,7 @@ const DB={get:k=>JSON.parse(localStorage.getItem(k)||'[]'),set:(k,v)=>localStora
 
 // ===== STATE =====
 let page='dashboard', tempItems=[], editId=null, tempAnexo=null, estoqueTab='produto', finTab='todos', romOrigem=false
+let tempOpcoes=[{nome:'Opção 1',itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]}], activeOpcaoIdx=0
 let tempAudioPrep=null, mediaRecorder=null, audioChunks=[], recordingTimer=null, recordingSec=0
 
 // ===== UTILS =====
@@ -1062,10 +1063,10 @@ function renderOrcTable(){
         :`<span style="color:var(--txt3);font-size:12px">—</span>`
       return`<tr>
       <td style="font-weight:700;color:var(--cara);white-space:nowrap">${orcNumFmt(o)}</td><td>${fmtDate(o.data)}</td><td><strong>${clienteNome(o.cliId)}</strong></td>
-      <td><span class="bdg" style="background:var(--cream2);color:var(--txt2)">${o.itens.length} item(s)</span></td>
+      <td>${Array.isArray(o.opcoes)&&o.opcoes.length>1?`<span class="bdg" style="background:#EEE3F5;color:#7B5EA7">${o.opcoes.length} opções</span>`:`<span class="bdg" style="background:var(--cream2);color:var(--txt2)">${o.itens.length} item(s)</span>`}</td>
       <td style="font-weight:600">${fmtDate(o.validade)}</td>
       <td><span style="font-size:12px;color:var(--txt2)">${o.pgto||'<span style="color:var(--txt3)">—</span>'}</span></td>
-      <td><strong style="font-size:15px;font-weight:800;color:var(--cara)">${fmt(o.totalF)}</strong></td>
+      <td><strong style="font-size:15px;font-weight:800;color:var(--cara)">${Array.isArray(o.opcoes)&&o.opcoes.length>1?o.opcoes.map(op=>fmt(op.totalF)).join(' / '):fmt(o.totalF)}</strong></td>
       <td><select class="orc-st-sel orc-st-${o.status}" onchange="statusOrc('${o.id}',this.value)">
         <option value="pendente" ${o.status==='pendente'?'selected':''}>Pendente</option>
         <option value="aprovado" ${o.status==='aprovado'?'selected':''}>Aprovado</option>
@@ -1087,7 +1088,7 @@ function renderOrcTable(){
 
 function novoOrc(fromRomaneio){
   romOrigem=!!fromRomaneio
-  tempItems=[{pId:'',nome:'',qtd:1,pu:0,sub:0}];editId=null
+  tempOpcoes=[{nome:'Opção 1',itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]}];activeOpcaoIdx=0;editId=null
   const clis=DB.get(S.CLIENTES)
   openModal(fromRomaneio?'Novo Romaneio':'Novo Orçamento',`
     <div class="frow"><div class="fg"><label>Cliente</label><select id="oCli"><option value="">Selecione...</option>${clis.map(c=>`<option value="${c.id}">${c.nome}</option>`).join('')}</select></div>
@@ -1095,6 +1096,8 @@ function novoOrc(fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${new Date(Date.now()+30*86400000).toISOString().split('T')[0]}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="0" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts('')}</select></div>
+    ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
+    <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
     <div class="items-tbl">
       <div class="items-hdr"><span>Produto</span><span>Qtd</span><span>Preço Unit.</span><span>Subtotal</span><span></span></div>
@@ -1117,13 +1120,38 @@ function novoOrc(fromRomaneio){
     <div class="fg" id="oEndEntregaGrp" style="display:none"><label>Endereço de Entrega</label><input id="oEndEntrega" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento..."></textarea></div>`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">${fromRomaneio?'Salvar Romaneio':'Salvar Orçamento'}</button>`,true)
-  renderOItens();calcOrcTotals()
+  renderOpcaoTabs();renderOItens();calcOrcTotals()
+}
+
+function renderOpcaoTabs(){
+  const el=document.getElementById('oOpcoesTabs');if(!el||romOrigem)return
+  el.innerHTML=tempOpcoes.map((op,i)=>{
+    const active=i===activeOpcaoIdx
+    return`<div style="display:flex;align-items:center;gap:4px;padding:5px 8px 5px 12px;border-radius:20px;border:1.5px solid ${active?'var(--cara)':'var(--cream2)'};background:${active?'var(--cara)':'var(--ivory)'};cursor:pointer" onclick="switchOpcao(${i})">
+      <input value="${(op.nome||'').replace(/"/g,'&quot;')}" oninput="renameOpcao(${i},this.value)" onclick="event.stopPropagation()" style="border:none;background:transparent;outline:none;font-size:12px;font-weight:700;color:${active?'#fff':'var(--txt)'};width:${Math.max(66,(op.nome||'').length*7+10)}px">
+      ${tempOpcoes.length>1?`<span onclick="event.stopPropagation();removeOpcao(${i})" style="cursor:pointer;color:${active?'rgba(255,255,255,.75)':'var(--txt3)'};font-size:14px;line-height:1;padding:0 2px">×</span>`:''}
+    </div>`
+  }).join('')+`<button type="button" onclick="addOpcao()" style="padding:5px 12px;border-radius:20px;border:1.5px dashed var(--cream2);background:transparent;font-size:12px;color:var(--txt2);cursor:pointer">+ Opção</button>`
+}
+function switchOpcao(i){activeOpcaoIdx=i;renderOpcaoTabs();renderOItens();calcOrcTotals()}
+function renameOpcao(i,val){tempOpcoes[i].nome=val}
+function addOpcao(){
+  tempOpcoes.push({nome:'Opção '+(tempOpcoes.length+1),itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]})
+  activeOpcaoIdx=tempOpcoes.length-1
+  renderOpcaoTabs();renderOItens();calcOrcTotals()
+}
+function removeOpcao(i){
+  if(tempOpcoes.length<=1)return
+  tempOpcoes.splice(i,1)
+  if(activeOpcaoIdx>=tempOpcoes.length)activeOpcaoIdx=tempOpcoes.length-1
+  renderOpcaoTabs();renderOItens();calcOrcTotals()
 }
 
 function renderOItens(){
   const el=document.getElementById('oItens');if(!el)return
   const prods=DB.get(S.PRODUTOS).filter(p=>p.ativo)
-  el.innerHTML=tempItems.map((it,i)=>`
+  const itens=tempOpcoes[activeOpcaoIdx].itens
+  el.innerHTML=itens.map((it,i)=>`
     <div style="border-top:1px solid var(--cream2)">
       <div style="display:grid;grid-template-columns:3fr 1fr 1.5fr 1fr 36px;gap:6px;padding:8px 11px;align-items:center">
         <select oninput="selectProdOrc(${i},this.value)" style="padding:5px 7px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt);width:100%">
@@ -1136,37 +1164,58 @@ function renderOItens(){
         <span id="orc_sub_${i}" style="font-size:12px;color:var(--txt2);font-weight:600">${fmt(it.sub||0)}</span>
         <button class="btn-ic btn-d" onclick="removeOrcItem(${i})" style="padding:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
-      ${it.pId==='_custom'?`<div style="padding:0 11px 4px"><input id="orc_nome_${i}" placeholder="Nome do item personalizado..." value="${it.nome||''}" oninput="tempItems[${i}].nome=this.value" style="width:100%;padding:6px 10px;border:1.5px solid var(--cara);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt)"></div>`:''}
-      <div style="padding:0 11px 8px"><input placeholder="Observação deste item..." value="${it.obs||''}" oninput="tempItems[${i}].obs=this.value" style="width:100%;padding:5px 10px;border:1.5px solid var(--cream2);border-radius:6px;font-size:11px;font-family:inherit;outline:none;color:var(--txt3);background:var(--ivory)"></div>
+      ${it.pId==='_custom'?`<div style="padding:0 11px 4px"><input id="orc_nome_${i}" placeholder="Nome do item personalizado..." value="${it.nome||''}" oninput="tempOpcoes[${activeOpcaoIdx}].itens[${i}].nome=this.value" style="width:100%;padding:6px 10px;border:1.5px solid var(--cara);border-radius:6px;font-size:12px;font-family:inherit;outline:none;color:var(--txt)"></div>`:''}
+      <div style="padding:0 11px 8px"><input placeholder="Observação deste item..." value="${it.obs||''}" oninput="tempOpcoes[${activeOpcaoIdx}].itens[${i}].obs=this.value" style="width:100%;padding:5px 10px;border:1.5px solid var(--cream2);border-radius:6px;font-size:11px;font-family:inherit;outline:none;color:var(--txt3);background:var(--ivory)"></div>
     </div>`).join('')
 }
 function selectProdOrc(i,pId){
   const prods=DB.get(S.PRODUTOS)
+  const itens=tempOpcoes[activeOpcaoIdx].itens
   if(pId&&pId!=='_custom'){
     const p=prods.find(x=>x.id===pId)
-    if(p){tempItems[i].pId=pId;tempItems[i].nome=p.nome;tempItems[i].pu=p.preco>0?p.preco:(p.custo||0);tempItems[i].sub=(tempItems[i].qtd||1)*tempItems[i].pu}
-  }else{tempItems[i].pId=pId||'';if(pId==='_custom')tempItems[i].nome=''}
+    if(p){itens[i].pId=pId;itens[i].nome=p.nome;itens[i].pu=p.preco>0?p.preco:(p.custo||0);itens[i].sub=(itens[i].qtd||1)*itens[i].pu}
+  }else{itens[i].pId=pId||'';if(pId==='_custom')itens[i].nome=''}
   renderOItens();calcOrcTotals()
 }
 function orcNumChange(i,f,v){
-  tempItems[i][f]=parseFloat(v)||0
-  tempItems[i].sub=(tempItems[i].qtd||1)*(tempItems[i].pu||0)
+  const itens=tempOpcoes[activeOpcaoIdx].itens
+  itens[i][f]=parseFloat(v)||0
+  itens[i].sub=(itens[i].qtd||1)*(itens[i].pu||0)
   const span=document.getElementById(`orc_sub_${i}`)
-  if(span)span.textContent=fmt(tempItems[i].sub)
+  if(span)span.textContent=fmt(itens[i].sub)
   calcOrcTotals()
 }
-function addOrcItem(){tempItems.push({pId:'',nome:'',qtd:1,pu:0,sub:0});renderOItens();calcOrcTotals()}
-function removeOrcItem(i){if(tempItems.length>1)tempItems.splice(i,1);else tempItems=[{pId:'',nome:'',qtd:1,pu:0,sub:0}];renderOItens();calcOrcTotals()}
+function addOrcItem(){tempOpcoes[activeOpcaoIdx].itens.push({pId:'',nome:'',qtd:1,pu:0,sub:0});renderOItens();calcOrcTotals()}
+function removeOrcItem(i){
+  const op=tempOpcoes[activeOpcaoIdx]
+  if(op.itens.length>1)op.itens.splice(i,1);else op.itens=[{pId:'',nome:'',qtd:1,pu:0,sub:0}]
+  renderOItens();calcOrcTotals()
+}
 function calcOrcTotals(){
-  const total=tempItems.reduce((a,x)=>a+(x.sub||0),0)
   const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
+  const activeTotal=tempOpcoes[activeOpcaoIdx].itens.reduce((a,x)=>a+(x.sub||0),0)
   const el=document.getElementById('oTotals');if(!el)return
-  el.innerHTML=`<div class="totbox"><div class="trow"><span>Subtotal</span><span>${fmt(total)}</span></div><div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(desc)}</span></div><div class="trow bold"><span>Total</span><span>${fmt(total-desc)}</span></div></div>`
+  let compareHtml=''
+  if(!romOrigem&&tempOpcoes.length>1){
+    compareHtml=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">`+tempOpcoes.map((op,i)=>{
+      const t=op.itens.reduce((a,x)=>a+(x.sub||0),0)
+      return`<div style="flex:1;min-width:110px;padding:6px 10px;border-radius:8px;border:1.5px solid ${i===activeOpcaoIdx?'var(--cara)':'var(--cream2)'};background:${i===activeOpcaoIdx?'var(--cream)':'var(--ivory)'};font-size:11px;cursor:pointer" onclick="switchOpcao(${i})">
+        <div style="color:var(--txt2);font-weight:700;margin-bottom:2px">${op.nome||'Opção '+(i+1)}</div>
+        <div style="font-weight:800;color:var(--cara)">${fmt(t-desc)}</div>
+      </div>`
+    }).join('')+`</div>`
+  }
+  const totalLbl=tempOpcoes.length>1?'Total — '+(tempOpcoes[activeOpcaoIdx].nome||'Opção '+(activeOpcaoIdx+1)):'Total'
+  el.innerHTML=compareHtml+`<div class="totbox"><div class="trow"><span>Subtotal</span><span>${fmt(activeTotal)}</span></div><div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(desc)}</span></div><div class="trow bold"><span>${totalLbl}</span><span>${fmt(activeTotal-desc)}</span></div></div>`
 }
 function editOrc(id,fromRomaneio){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   romOrigem=!!fromRomaneio
-  editId=id;tempItems=JSON.parse(JSON.stringify(o.itens))
+  editId=id
+  tempOpcoes=(Array.isArray(o.opcoes)&&o.opcoes.length)
+    ?JSON.parse(JSON.stringify(o.opcoes)).map(op=>({nome:op.nome||'Opção 1',itens:(op.itens&&op.itens.length)?op.itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]}))
+    :[{nome:'Opção 1',itens:JSON.parse(JSON.stringify((o.itens&&o.itens.length)?o.itens:[{pId:'',nome:'',qtd:1,pu:0,sub:0}]))}]
+  activeOpcaoIdx=0
   const clis=DB.get(S.CLIENTES)
   openModal(fromRomaneio?'Editar Romaneio':'Editar Orçamento',`
     <div class="frow"><div class="fg"><label>Cliente</label><select id="oCli"><option value="">Selecione...</option>${clis.map(c=>`<option value="${c.id}" ${c.id===o.cliId?'selected':''}>${c.nome}</option>`).join('')}</select></div>
@@ -1174,6 +1223,8 @@ function editOrc(id,fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${o.validade||''}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="${o.desc||0}" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts(o.pgto||'')}</select></div>
+    ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
+    <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
     <div class="items-tbl"><div class="items-hdr"><span>Produto</span><span>Qtd</span><span>Preço Unit.</span><span>Subtotal</span><span></span></div><div id="oItens"></div></div>
     <button class="btn btn-s btn-sm" onclick="addOrcItem()">+ Item</button>
@@ -1193,7 +1244,7 @@ function editOrc(id,fromRomaneio){
     <div class="fg" id="oEndEntregaGrp" style="display:${o.entrega==='entrega'?'block':'none'}"><label>Endereço de Entrega</label><input id="oEndEntrega" value="${o.endEntrega||''}" placeholder="Rua, número, bairro, cidade..."></div>
     <div class="fg" style="margin-top:8px"><label>Observações</label><textarea id="oObs" placeholder="Detalhes do orçamento...">${o.obs||''}</textarea></div>`,
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarOrc()">${fromRomaneio?'Atualizar Romaneio':'Atualizar Orçamento'}</button>`,true)
-  renderOItens();calcOrcTotals()
+  renderOpcaoTabs();renderOItens();calcOrcTotals()
 }
 
 function toggleEndEntregaOrc(){
@@ -1205,9 +1256,16 @@ function toggleEndEntregaOrc(){
 function salvarOrc(){
   const cliId=(document.getElementById('oCli')||{}).value;const data=(document.getElementById('oData')||{}).value
   if(!cliId||!data){toast('Selecione cliente e data','err');return}
-  const itens=tempItems.filter(x=>x.nome||x.sub>0)
-  if(!itens.length){toast('Adicione ao menos um item','err');return}
-  const total=itens.reduce((a,x)=>a+x.sub,0);const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
+  const desc=parseFloat((document.getElementById('oDesc')||{}).value)||0
+  const opcoesValidas=tempOpcoes.map(op=>{
+    const its=op.itens.filter(x=>x.nome||x.sub>0)
+    const tot=its.reduce((a,x)=>a+x.sub,0)
+    return{nome:op.nome||'Opção 1',itens:its,total:tot,desc,totalF:tot-desc}
+  }).filter(op=>op.itens.length)
+  if(!opcoesValidas.length){toast('Adicione ao menos um item','err');return}
+  const principal=opcoesValidas[0]
+  const itens=principal.itens,total=principal.total,totalF=principal.totalF
+  const opcoes=opcoesValidas.length>1?opcoesValidas:undefined
   const pgto=(document.getElementById('oPgto')||{}).value||undefined
   const dataEvento=(document.getElementById('oDataEvento')||{}).value||undefined
   const dataEntrega=(document.getElementById('oDataEntrega')||{}).value||undefined
@@ -1218,10 +1276,10 @@ function salvarOrc(){
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio atualizado!':'Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF:total-desc,status:romOrigem?'aprovado':'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,status:romOrigem?'aprovado':'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio criado!':'Orçamento salvo!','ok')
   }
   render(romOrigem?'romaneio':'orcamentos')
@@ -1263,8 +1321,11 @@ function gerarVendaDeOrc(orcId){
   if(DB.get(S.VENDAS).find(x=>x.orcId===orcId)){toast('Venda já gerada para este orçamento','warn');return}
   const pgtos=['Pix','Dinheiro','Cartão','Transferência']
   const stl='width:100%;padding:8px 10px;border:1.5px solid var(--cream2);border-radius:8px;font-size:14px;font-family:inherit;outline:none;color:var(--txt)'
+  const temOpcoes=Array.isArray(o.opcoes)&&o.opcoes.length>1
   openModal('Gerar Venda do Orçamento',`
-    <p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Confirme os dados para registrar a venda de <strong>${fmt(o.totalF||o.total)}</strong>:</p>
+    ${temOpcoes?`<div class="fg"><label>Qual opção o cliente escolheu?</label><select id="gvOpcao" style="${stl}" onchange="document.getElementById('gvValorInfo').textContent='Valor: '+fmt(o.opcoes[this.value].totalF)">${o.opcoes.map((op,i)=>`<option value="${i}">${op.nome||'Opção '+(i+1)} — ${fmt(op.totalF)}</option>`).join('')}</select></div>
+    <p id="gvValorInfo" style="font-size:13px;color:var(--txt2);margin-bottom:12px">Valor: ${fmt(o.opcoes[0].totalF)}</p>`
+    :`<p style="font-size:13px;color:var(--txt2);margin-bottom:12px">Confirme os dados para registrar a venda de <strong>${fmt(o.totalF||o.total)}</strong>:</p>`}
     <div class="frow">
       <div class="fg"><label>Forma de Pagamento</label><select id="gvPgto" style="${stl}">${pgtos.map(p=>`<option>${p}</option>`).join('')}</select></div>
       <div class="fg"><label>Status</label><select id="gvStatus" style="${stl}"><option value="pago">Pago</option><option value="pendente">Pendente</option></select></div>
@@ -1278,14 +1339,17 @@ function confirmarGerarVendaDeOrc(orcId){
   const pgto=(document.getElementById('gvPgto')||{}).value||'Pix'
   const status=(document.getElementById('gvStatus')||{}).value||'pago'
   const data=(document.getElementById('gvData')||{}).value||today()
-  const venda={id:genId(),cliId:o.cliId,data,itens:o.itens,total:o.total,desc:o.desc||0,totalF:o.totalF||o.total,pgto,status,noivos:o.noivos||'',obs:o.obs||'',orcId}
+  const opcaoSel=document.getElementById('gvOpcao')
+  const escolhida=(opcaoSel&&Array.isArray(o.opcoes))?o.opcoes[Number(opcaoSel.value)]:null
+  const itens=escolhida?escolhida.itens:o.itens,total=escolhida?escolhida.total:o.total,totalF=escolhida?escolhida.totalF:(o.totalF||o.total)
+  const venda={id:genId(),cliId:o.cliId,data,itens,total,desc:o.desc||0,totalF,pgto,status,noivos:o.noivos||'',obs:o.obs||'',orcId}
   const vendas=DB.get(S.VENDAS);vendas.push(venda);DB.set(S.VENDAS,vendas)
   const trans=DB.get(S.TRANS)
   trans.push({id:genId(),tipo:'entrada',cat:'Venda',desc:`Venda - ${clienteNome(o.cliId)} (Orç.)`,val:venda.totalF,data,pgto,ref:venda.id})
   DB.set(S.TRANS,trans)
   const prods=DB.get(S.PRODUTOS)
   let descontados=0
-  ;(o.itens||[]).forEach(it=>{if(!it.pId||it.pId==='_custom')return;const i=prods.findIndex(p=>p.id===it.pId);if(i>=0){prods[i].estoque=Math.max(0,(prods[i].estoque||0)-(parseFloat(it.qtd)||0));descontados++}})
+  ;(itens||[]).forEach(it=>{if(!it.pId||it.pId==='_custom')return;const i=prods.findIndex(p=>p.id===it.pId);if(i>=0){prods[i].estoque=Math.max(0,(prods[i].estoque||0)-(parseFloat(it.qtd)||0));descontados++}})
   if(descontados>0)DB.set(S.PRODUTOS,prods)
   closeModal()
   toast(`Venda gerada! ${descontados>0?descontados+' item(s) descontado(s) do estoque.':''}`,'ok')
@@ -1306,14 +1370,28 @@ function verOrc(id){
       <div><strong>${clienteNome(o.cliId)}</strong><div style="font-size:12px;color:var(--txt3)">${fmtDate(o.data)} · Válido até ${fmtDate(o.validade)}</div>${o.pgto?`<div style="margin-top:4px"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--txt2);background:var(--cream);padding:3px 10px;border-radius:20px;border:1px solid var(--cream2)"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>${o.pgto}</span></div>`:''}</div>
       <span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span>
     </div>
-    <div class="tc"><table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>
-      ${(()=>{const _ps=DB.get(S.PRODUTOS);const _gn=i=>{if(!i.pId||i.pId==='_custom')return i.nome||'';const _p=_ps.find(x=>x.id===i.pId);return _p?_p.nome:(i.nome||'')};return o.itens.map(i=>`<tr><td>${_gn(i)}${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')})()}
-    </tbody></table></div>
-    <div style="margin-top:12px" class="totbox">
-      <div class="trow"><span>Subtotal</span><span>${fmt(o.total)}</span></div>
-      ${o.desc>0?`<div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(o.desc)}</span></div>`:''}
-      <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
-    </div>
+    ${(()=>{
+      const _ps=DB.get(S.PRODUTOS);const _gn=i=>{if(!i.pId||i.pId==='_custom')return i.nome||'';const _p=_ps.find(x=>x.id===i.pId);return _p?_p.nome:(i.nome||'')}
+      const _tbl=(itens)=>`<div class="tc"><table><thead><tr><th>Item</th><th>Qtd</th><th>Preço</th><th>Subtotal</th></tr></thead><tbody>
+        ${itens.map(i=>`<tr><td>${_gn(i)}${i.obs?`<br><small style="color:var(--txt3);font-style:italic">↳ ${i.obs}</small>`:''}</td><td>${i.qtd}</td><td>${fmt(i.pu)}</td><td>${fmt(i.sub)}</td></tr>`).join('')}
+      </tbody></table></div>`
+      if(Array.isArray(o.opcoes)&&o.opcoes.length>1){
+        return o.opcoes.map((op,i)=>`<div style="margin-bottom:16px;padding-bottom:2px;${i<o.opcoes.length-1?'border-bottom:2px dashed var(--cream2)':''}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="font-size:14px;color:var(--cara)">${op.nome||'Opção '+(i+1)}</strong><span style="font-size:11px;color:var(--txt3)">${op.itens.length} item(s)</span></div>
+          ${_tbl(op.itens)}
+          <div style="margin-top:10px" class="totbox">
+            <div class="trow"><span>Subtotal</span><span>${fmt(op.total)}</span></div>
+            ${op.desc>0?`<div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(op.desc)}</span></div>`:''}
+            <div class="trow bold"><span>Total</span><span>${fmt(op.totalF)}</span></div>
+          </div>
+        </div>`).join('')
+      }
+      return _tbl(o.itens)+`<div style="margin-top:12px" class="totbox">
+        <div class="trow"><span>Subtotal</span><span>${fmt(o.total)}</span></div>
+        ${o.desc>0?`<div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(o.desc)}</span></div>`:''}
+        <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
+      </div>`
+    })()}
     ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
@@ -5377,19 +5455,44 @@ function imprimirOrc(id){
   const prods=DB.get(S.PRODUTOS)
   const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
   const getNomeProd=it=>{if(!it.pId||it.pId==='_custom')return it.nome||it.desc||'';const _p=prods.find(x=>x.id===it.pId);return _p?_p.nome:(it.nome||it.desc||'')}
-  const cats=[...new Set(o.itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
-  let num=0
-  const rows=cats.flatMap(cat=>[
-    `<tr><td colspan="6" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
-    ...o.itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
-          <td class="n">${num}</td>
-          <td>${getNomeProd(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
-          <td class="c">Un</td>
-          <td class="c">${it.qtd}</td>
-          <td class="r">${fmt(it.pu)}</td>
-          <td class="r">${fmt(it.sub)}</td>
-        </tr>`})
-  ]).join('')
+  const buildRows=itens=>{
+    const cats=[...new Set(itens.map(it=>getCat(it.pId)))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
+    let num=0
+    return cats.flatMap(cat=>[
+      `<tr><td colspan="6" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
+      ...itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
+            <td class="n">${num}</td>
+            <td>${getNomeProd(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+            <td class="c">Un</td>
+            <td class="c">${it.qtd}</td>
+            <td class="r">${fmt(it.pu)}</td>
+            <td class="r">${fmt(it.sub)}</td>
+          </tr>`})
+    ]).join('')
+  }
+  const temOpcoesPrint=Array.isArray(o.opcoes)&&o.opcoes.length>1
+  const prodBlockHtml=temOpcoesPrint
+    ?o.opcoes.map((op,i)=>`
+      <div class="prod-hdr" style="display:flex;justify-content:space-between;align-items:center">
+        <span>${(op.nome||'OPÇÃO '+(i+1)).toUpperCase()}</span><span>${fmt(op.totalF)}</span>
+      </div>
+      <table class="prod-table">
+        <thead><tr>
+          <th class="c" style="width:40px">ITEM</th><th>NOME / DESCRIÇÃO</th><th class="c">UND.</th><th class="c">QTD.</th><th class="r">VR. UNIT.</th><th class="r">SUBTOTAL</th>
+        </tr></thead>
+        <tbody>${buildRows(op.itens)}</tbody>
+      </table>
+      ${op.desc>0?`<div class="disc-row"><span>Desconto</span><span>- ${fmt(op.desc)}</span></div>`:''}
+      <div class="total-row" style="${i<o.opcoes.length-1?'margin-bottom:22px':''}"><span>TOTAL — ${(op.nome||'OPÇÃO '+(i+1)).toUpperCase()}</span><span>${fmt(op.totalF)}</span></div>`).join('')
+    :`<div class="prod-hdr">PRODUTOS</div>
+      <table class="prod-table">
+        <thead><tr>
+          <th class="c" style="width:40px">ITEM</th><th>NOME / DESCRIÇÃO</th><th class="c">UND.</th><th class="c">QTD.</th><th class="r">VR. UNIT.</th><th class="r">SUBTOTAL</th>
+        </tr></thead>
+        <tbody>${buildRows(o.itens)}</tbody>
+      </table>
+      ${o.desc>0?`<div class="disc-row"><span>Desconto</span><span>- ${fmt(o.desc)}</span></div>`:''}
+      <div class="total-row"><span>TOTAL</span><span>${fmt(o.totalF)}</span></div>`
   const w=window.open('','_blank','width=900,height=700')
   w.document.write(docHead('ORÇAMENTO')+
     `<div style="display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0 14px;border-bottom:2px solid #C4B09A;margin-bottom:16px">
@@ -5422,20 +5525,7 @@ function imprimirOrc(id){
       </div>
     </div>
     ${cliBlock(cli)}
-    <div class="prod-hdr">PRODUTOS</div>
-    <table class="prod-table">
-      <thead><tr>
-        <th class="c" style="width:40px">ITEM</th>
-        <th>NOME / DESCRIÇÃO</th>
-        <th class="c">UND.</th>
-        <th class="c">QTD.</th>
-        <th class="r">VR. UNIT.</th>
-        <th class="r">SUBTOTAL</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    ${o.desc>0?`<div class="disc-row"><span>Desconto</span><span>- ${fmt(o.desc)}</span></div>`:''}
-    <div class="total-row"><span>TOTAL</span><span>${fmt(o.totalF)}</span></div>`
+    ${prodBlockHtml}`
     +docFoot(o.obs,true))
   w.document.close();setTimeout(()=>w.print(),400)
 }
@@ -5562,6 +5652,9 @@ async function gerarLinkOrc(id){
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
   const _gn=x=>{if(!x.pId||x.pId==='_custom')return x.nome||x.desc||'';const _p=_prods.find(p=>p.id===x.pId);return _p?_p.nome:(x.nome||x.desc||'')}
   p.it=o.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId)])
+  if(Array.isArray(o.opcoes)&&o.opcoes.length>1){
+    p.op=o.opcoes.map(op=>({n:op.nome||'Opção',it:op.itens.map(x=>[_gn(x),x.qtd,x.pu||0,x.sub,_gc(x.pId)]),t:op.total,tf:op.totalF}))
+  }
   if(cli.nome)p.cn=cli.nome;if(cli.fone)p.cf=cli.fone
   const json=JSON.stringify(p)
   const compressed=await _b64compress(json)
@@ -5670,18 +5763,23 @@ function showClientView(raw){
     clinome=raw.cn||'';clifone=raw.cf||''
   }
   // Agrupar por categoria — mesma lógica do imprimirOrc
-  const _cats=[...new Set(itens.map(it=>it.c||'Outros'))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
-  let _num=0
-  const _rows=_cats.flatMap(cat=>[
-    `<tr><td colspan="4" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
-    ...itens.filter(it=>(it.c||'Outros')===cat).map(it=>{_num++;return`<tr style="${_num%2===0?'background:#FAF7F4':''}">
-      <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#9A8E82;font-weight:700;font-size:11px">${_num}</td>
-      <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.n||''}</td>
-      <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#3D3028">${it.q}</td>
-      <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;color:#3D3028">${fmt(it.pu||it.s/(it.q||1))}</td>
-      <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;font-weight:600;color:#3D3028">${fmt(it.s)}</td>
-    </tr>`})
-  ]).join('')
+  const _buildRowsHtml=its=>{
+    const _cats=[...new Set(its.map(it=>it.c||'Outros'))].sort((a,b)=>{if(a==='Personalizado')return 1;if(b==='Personalizado')return-1;return a.localeCompare(b,'pt')})
+    let _n=0
+    return _cats.flatMap(cat=>[
+      `<tr><td colspan="4" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`,
+      ...its.filter(it=>(it.c||'Outros')===cat).map(it=>{_n++;return`<tr style="${_n%2===0?'background:#FAF7F4':''}">
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#9A8E82;font-weight:700;font-size:11px">${_n}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.n||''}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#3D3028">${it.q}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;color:#3D3028">${fmt(it.pu||it.s/(it.q||1))}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;font-weight:600;color:#3D3028">${fmt(it.s)}</td>
+      </tr>`})
+    ]).join('')
+  }
+  const _rows=_buildRowsHtml(itens)
+  // Opções alternativas (pacotes) — se o orçamento tiver mais de uma proposta pro cliente escolher
+  const _opcoes=(Array.isArray(raw.op)&&raw.op.length>1)?raw.op.map(o=>({nome:o.n||'Opção',itens:(o.it||[]).map(x=>({n:x[0],q:x[1],pu:x[2]||0,s:x[3],c:x[4]||'Outros'})),total:o.t,totalF:o.tf})):null
   // Info cards — mesma lógica do imprimirOrc
   const _infoCell=(lbl,val)=>`<div style="flex:1;min-width:150px;padding:11px 16px;background:#FAF7F4;border-right:1px solid #DDD5C8;border-bottom:1px solid #DDD5C8"><div style="font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:#9A8E82;margin-bottom:5px;font-weight:700">${lbl}</div><div style="font-size:13px;font-weight:700;color:#3D3028;line-height:1.3">${val}</div></div>`
   const _infoCells=[]
@@ -5771,6 +5869,30 @@ function showClientView(raw){
         </table>
       </div>
 
+      ${_opcoes?`
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:2px">Escolha uma opção</div>
+      <p style="font-size:11px;color:#9A8E82;margin-bottom:12px">Selecione a proposta desejada abaixo antes de aprovar.</p>
+      ${_opcoes.map((op,i)=>`
+      <div style="border:2px solid ${i===0?'#B8912A':'#DDD5C8'};border-radius:6px;margin-bottom:14px;overflow:hidden">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;background:${i===0?'#FBF3E4':'#FAF7F4'};cursor:pointer">
+          <span style="display:flex;align-items:center;gap:8px"><input type="radio" name="cvOpcao" value="${i}" ${i===0?'checked':''} style="width:16px;height:16px"><strong style="font-size:14px;color:#3D3028">${op.nome}</strong></span>
+          <strong style="font-size:15px;color:#B8912A">${fmt(op.totalF)}</strong>
+        </label>
+        <div class="cv-table-wrap">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
+            <thead><tr>
+              <th style="background:#8A7060;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #9A8070;width:36px;text-align:center">Nº</th>
+              <th style="background:#8A7060;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #9A8070;text-align:left">NOME / DESCRIÇÃO</th>
+              <th style="background:#8A7060;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #9A8070;text-align:center;width:44px">QTD</th>
+              <th style="background:#8A7060;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #9A8070;text-align:right;width:80px">VR. UNIT.</th>
+              <th style="background:#8A7060;color:#fff;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border:1px solid #9A8070;text-align:right;width:90px">SUBTOTAL</th>
+            </tr></thead>
+            <tbody>${_buildRowsHtml(op.itens)}</tbody>
+          </table>
+        </div>
+      </div>`).join('')}
+      ${desc>0?`<p style="font-size:11px;color:#9A8E82;margin:-4px 0 14px">Desconto de ${fmt(desc)} já incluso em cada opção acima.</p>`:''}
+      `:`
       <div style="background:#C4B09A;color:#fff;padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase">PRODUTOS</div>
       <div class="cv-table-wrap">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
@@ -5789,6 +5911,7 @@ function showClientView(raw){
       <div style="background:#7A6858;color:#fff;display:flex;justify-content:space-between;padding:10px 12px;font-size:15px;font-weight:700">
         <span>TOTAL</span><span>${fmt(totalF)}</span>
       </div>
+      `}
 
       ${obs?`<div style="margin:18px 0;padding:12px;border:1px solid #DDD9D2;border-radius:4px;font-size:13px;color:#52493E"><strong style="display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E">Observações</strong>${obs}</div>`:''}
 
@@ -5798,11 +5921,23 @@ function showClientView(raw){
       </div>
 
       <div class="cv-btns">
-        ${ew?`<a href="https://wa.me/${ew.replace(/\D/g,'')}?text=${encodeURIComponent('Olá, aprovo o orçamento #'+oid+' no valor de '+fmt(totalF)+'!')}" target="_blank" class="cv-btn" style="background:#25D366;color:#fff"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>Aprovar via WhatsApp</a>`:''}
-        ${ee?`<a href="mailto:${ee}?subject=Aprovação Orçamento %23${oid}&body=Olá, aprovo o orçamento %23${oid} no valor de ${fmt(totalF)}." class="cv-btn" style="background:#7A6858;color:#fff"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#fff" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="#fff" stroke-width="2"/></svg>Aprovar via E-mail</a>`:''}
+        ${ew?`<button type="button" id="cvBtnWa" class="cv-btn" style="background:#25D366;color:#fff;border:none;cursor:pointer"><svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>Aprovar via WhatsApp</button>`:''}
+        ${ee?`<button type="button" id="cvBtnEmail" class="cv-btn" style="background:#7A6858;color:#fff;border:none;cursor:pointer"><svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" stroke="#fff" stroke-width="2"/><path d="M22 6l-10 7L2 6" stroke="#fff" stroke-width="2"/></svg>Aprovar via E-mail</button>`:''}
       </div>
     </div>
   </div>`
+  const _approvalText=()=>{
+    if(_opcoes){
+      const sel=document.querySelector('input[name="cvOpcao"]:checked')
+      const op=_opcoes[sel?Number(sel.value):0]
+      return'Olá, aprovo o orçamento #'+oid+' — '+op.nome+' — no valor de '+fmt(op.totalF)+'!'
+    }
+    return'Olá, aprovo o orçamento #'+oid+' no valor de '+fmt(totalF)+'!'
+  }
+  const _waBtn=document.getElementById('cvBtnWa')
+  if(_waBtn)_waBtn.onclick=()=>window.open('https://wa.me/'+ew.replace(/\D/g,'')+'?text='+encodeURIComponent(_approvalText()),'_blank')
+  const _emailBtn=document.getElementById('cvBtnEmail')
+  if(_emailBtn)_emailBtn.onclick=()=>{location.href='mailto:'+ee+'?subject='+encodeURIComponent('Aprovação Orçamento #'+oid)+'&body='+encodeURIComponent(_approvalText())}
 }
 
 async function gerarLinkCont(id){
