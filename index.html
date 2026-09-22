@@ -1920,8 +1920,8 @@ function salvarPrecoInline(id,val,inp){
   if(inp){inp.style.border='1.5px solid var(--ok)';setTimeout(()=>{inp.style.border='1.5px solid var(--cream2)'},1200)}
   toast(`Preço de "${prods[i].nome}" atualizado!`,'ok')
 }
-function novoProd(){editId=null;tempAnexo=null;openModal('Novo Item',prodForm({tipo:estoqueTab}),`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarProd()">Salvar</button>`)}
-function editProd(id){const p=DB.get(S.PRODUTOS).find(x=>x.id===id);if(!p)return;editId=id;tempAnexo=p.foto||null;openModal('Editar Item',prodForm(p),`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarProd()">Salvar</button>`)}
+function novoProd(){editId=null;tempAnexo=null;openModal('Novo Item',prodForm({tipo:estoqueTab}),`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarProd()">Salvar</button>`);calcProdCusto()}
+function editProd(id){const p=DB.get(S.PRODUTOS).find(x=>x.id===id);if(!p)return;editId=id;tempAnexo=p.foto||null;openModal('Editar Item',prodForm(p),`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarProd()">Salvar</button>`);calcProdCusto()}
 function prodForm(p){
   const ing=p.tipo==='ingrediente'
   const stl='padding:7px 8px;border:1.5px solid var(--cream2);border-radius:7px;font-size:13px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;color:var(--txt);background:var(--white)'
