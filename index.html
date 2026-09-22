@@ -1192,6 +1192,18 @@ function novoOrc(fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${new Date(Date.now()+30*86400000).toISOString().split('T')[0]}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="0" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts('')}</select></div>
+    ${fromRomaneio?'':`<div class="fg">
+      <label>Entrada / Sinal (%) <span style="font-weight:400;text-transform:none;color:var(--txt3)">— opcional, aparece na proposta pro cliente</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="oEntradaPct" value="" min="0" max="100" placeholder="Ex: 50" style="width:90px" oninput="calcOrcTotals()">
+        <span style="font-size:13px;color:var(--txt2)">%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=50;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">50%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=30;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">30%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=100;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">100%</span>
+        <span onclick="document.getElementById('oEntradaPct').value='';calcOrcTotals()" style="font-size:11px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:4px 9px;cursor:pointer">Limpar</span>
+      </div>
+      <div id="oEntradaPreview" style="font-size:12px;color:var(--txt2);margin-top:6px"></div>
+    </div>`}
     ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
     <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
@@ -1329,6 +1341,17 @@ function calcOrcTotals(){
   }
   const totalLbl=tempOpcoes.length>1?'Total — '+(tempOpcoes[activeOpcaoIdx].nome||'Opção '+(activeOpcaoIdx+1)):'Total'
   el.innerHTML=compareHtml+`<div class="totbox"><div class="trow"><span>Subtotal</span><span>${fmt(activeTotal)}</span></div><div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(desc)}</span></div><div class="trow bold"><span>${totalLbl}</span><span>${fmt(activeTotal-desc)}</span></div></div>`
+  const prevEl=document.getElementById('oEntradaPreview')
+  if(prevEl){
+    const pct=parseFloat((document.getElementById('oEntradaPct')||{}).value)||0
+    const totalF=activeTotal-desc
+    if(pct>0){
+      const entradaVal=totalF*pct/100
+      prevEl.textContent=`Entrada: ${fmt(entradaVal)} (${pct}%) · Saldo: ${fmt(totalF-entradaVal)}`
+    }else{
+      prevEl.textContent=''
+    }
+  }
 }
 function editOrc(id,fromRomaneio){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
@@ -1345,6 +1368,18 @@ function editOrc(id,fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${o.validade||''}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="${o.desc||0}" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts(o.pgto||'')}</select></div>
+    ${fromRomaneio?'':`<div class="fg">
+      <label>Entrada / Sinal (%) <span style="font-weight:400;text-transform:none;color:var(--txt3)">— opcional, aparece na proposta pro cliente</span></label>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="number" id="oEntradaPct" value="${o.entradaPct||''}" min="0" max="100" placeholder="Ex: 50" style="width:90px" oninput="calcOrcTotals()">
+        <span style="font-size:13px;color:var(--txt2)">%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=50;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">50%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=30;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">30%</span>
+        <span onclick="document.getElementById('oEntradaPct').value=100;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">100%</span>
+        <span onclick="document.getElementById('oEntradaPct').value='';calcOrcTotals()" style="font-size:11px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:4px 9px;cursor:pointer">Limpar</span>
+      </div>
+      <div id="oEntradaPreview" style="font-size:12px;color:var(--txt2);margin-top:6px"></div>
+    </div>`}
     ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
     <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
@@ -1396,13 +1431,14 @@ function salvarOrc(){
   const entregaSel=document.querySelector('input[name="oEntrega"]:checked')
   const entrega=entregaSel?entregaSel.value:'retira'
   const endEntrega=entrega==='entrega'?v('oEndEntrega')||undefined:undefined
+  const entradaPct=parseFloat((document.getElementById('oEntradaPct')||{}).value)||undefined
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,entradaPct,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio atualizado!':'Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,status:romOrigem?'aprovado':'pendente',pgto,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,status:romOrigem?'aprovado':'pendente',pgto,entradaPct,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio criado!':'Orçamento salvo!','ok')
   }
   render(romOrigem?'romaneio':'orcamentos')
@@ -1520,6 +1556,7 @@ function verOrc(id){
         <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
       </div>`
     })()}
+    ${o.entradaPct?`<div style="margin-top:8px;font-size:12px;color:var(--txt2)"><strong>Condição de pagamento:</strong> ${o.entradaPct}% de entrada + ${100-o.entradaPct}% na entrega</div>`:''}
     ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
@@ -1591,7 +1628,7 @@ function _contModal(titulo,c,orcc){
   const opcaoIdx=temOpcoes?(orcc.opcaoAprovada!=null&&orcc.opcoes[orcc.opcaoAprovada]?orcc.opcaoAprovada:0):0
   const opcaoSel=temOpcoes?orcc.opcoes[opcaoIdx]:null
   const totalF=c?c.totalF:(opcaoSel?opcaoSel.totalF:(orcc?orcc.totalF:0))
-  const entrada=c?c.entrada:(orcc?Math.round(totalF*0.5):0)
+  const entrada=c?c.entrada:(orcc?Math.round(totalF*(orcc.entradaPct||50)/100):0)
   const defObjeto=c?.cl_objeto||'A CONTRATADA se compromete a produzir e fornecer os produtos descritos neste contrato, nas quantidades e especificações acordadas, dentro do prazo estipulado.'
   const defCancelamento=c?.cl_cancelamento||'Em caso de cancelamento com menos de 15 (quinze) dias de antecedência, o valor do sinal não será devolvido. Cancelamentos com mais de 15 (quinze) dias de antecedência ensejam devolução de 50% do valor pago como entrada.'
   const defOutras=c?.cl_outras||'O presente contrato é celebrado em caráter irrevogável e irretratável, obrigando as partes e seus sucessores. O não pagamento na data acordada poderá implicar na suspensão do serviço. Fica eleito o foro da comarca de São Paulo para dirimir eventuais conflitos.'
@@ -5846,6 +5883,7 @@ function imprimirOrc(id){
           if(o.dataEntrega)r.push(cell('Data da Entrega',fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:'')))
           if(o.entrega)r.push(cell('Modalidade',modalidadeLabel(o.entrega)))
           if(o.pgto)r.push(cell('Forma de Pagamento',o.pgto))
+          if(o.entradaPct)r.push(cell('Condição de Pagamento',`${o.entradaPct}% entrada + ${100-o.entradaPct}% na entrega`))
           if(o.endEntrega)r.push(cell('Endereço de Entrega',o.endEntrega))
           return r.join('')
         })()}
@@ -5974,6 +6012,7 @@ async function gerarLinkOrc(id){
   if(o.horaEntrega)p.hd=o.horaEntrega
   if(o.entrega)p.md=o.entrega
   if(o.pgto)p.pg=o.pgto
+  if(o.entradaPct)p.ep=o.entradaPct
   if(o.endEntrega)p.xe=o.endEntrega
   const _prods=DB.get(S.PRODUTOS)
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
@@ -6117,17 +6156,17 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe
+  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct
   if(raw.o){
     const {o,cli,e}=raw
     nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
-    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||''
+    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
     nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
-    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||''
+    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0
     itens=(raw.it||[]).map(x=>{
       if(!Array.isArray(x))return{n:x.n,q:x.q,pu:x.pu||0,s:x.s,c:x.c||'Outros',foto:x.f||'',obs:x.o||''}
       return x.length>=5?{n:x[0],q:x[1],pu:x[2],s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''}:{n:x[0],q:x[1],pu:0,s:x[2],c:x[3]||'Outros'}
@@ -6165,6 +6204,7 @@ function showClientView(raw,docId){
   if(dd)_infoCells.push(_infoCell('Data da Entrega',fmtDate(dd)+(hd?' às '+hd:'')))
   if(md)_infoCells.push(_infoCell('Modalidade',modalidadeLabel(md)))
   if(pg)_infoCells.push(_infoCell('Forma de Pagamento',pg))
+  if(entradaPct)_infoCells.push(_infoCell('Condição de Pagamento',`${entradaPct}% entrada + ${100-entradaPct}% na entrega`))
   if(xe)_infoCells.push(_infoCell('Endereço de Entrega',xe))
   // Logo
   const _logoEl=document.querySelector('.slogo img')
