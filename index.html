@@ -1595,6 +1595,7 @@ function _contModal(titulo,c,orcc){
   const defObjeto=c?.cl_objeto||'A CONTRATADA se compromete a produzir e fornecer os produtos descritos neste contrato, nas quantidades e especificações acordadas, dentro do prazo estipulado.'
   const defCancelamento=c?.cl_cancelamento||'Em caso de cancelamento com menos de 15 (quinze) dias de antecedência, o valor do sinal não será devolvido. Cancelamentos com mais de 15 (quinze) dias de antecedência ensejam devolução de 50% do valor pago como entrada.'
   const defOutras=c?.cl_outras||'O presente contrato é celebrado em caráter irrevogável e irretratável, obrigando as partes e seus sucessores. O não pagamento na data acordada poderá implicar na suspensão do serviço. Fica eleito o foro da comarca de São Paulo para dirimir eventuais conflitos.'
+  tempAnexo=c?.comprovanteAnexo||null
   openModal(titulo,`
     ${temOpcoes?`<div class="fg" style="background:#F3EEFA;border:1.5px solid #D9CCEF;border-radius:8px;padding:10px 12px;margin-bottom:12px">
       <label style="color:#7B5EA7">Qual opção de pacote o cliente escolheu?${orcc.opcaoAprovada!=null?' <span style="font-weight:400;color:#8A7E6E">(veio da aprovação assinada)</span>':''}</label>
@@ -1637,6 +1638,7 @@ function _contModal(titulo,c,orcc){
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--cream2);border-radius:8px"><input type="checkbox" id="coEntradaPaga" ${c?.entradaPaga?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Entrada já foi paga</label>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--cream2);border-radius:8px"><input type="checkbox" id="coSaldoPago" ${c?.saldoPago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Saldo já foi pago</label>
     </div>
+    ${anexoWidget(tempAnexo,'📎 Comprovante de Pagamento (opcional) — fica disponível pro cliente ver no link do contrato')}
     <div style="margin:16px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--cara);border-bottom:2px solid var(--cream2);padding-bottom:6px">Cláusulas do Contrato</div>
     <div class="fg"><label>Cláusula 1 — Do Objeto</label><textarea id="coCl1" rows="3">${defObjeto}</textarea></div>
     <div class="fg"><label>Cláusula 2 — Do Valor e Pagamento <span style="font-size:10px;color:var(--txt3)">(gerado automaticamente ao salvar)</span></label><textarea id="coCl2" rows="3">${c?.cl_pagamento||''}</textarea></div>
@@ -1724,7 +1726,8 @@ function salvarCont(editId,orcId){
     cl_entrega:cl3,
     cl_cancelamento:(document.getElementById('coCl4')||{}).value||'',
     cl_outras:(document.getElementById('coCl5')||{}).value||'',
-    obs:(document.getElementById('coObs')||{}).value||''
+    obs:(document.getElementById('coObs')||{}).value||'',
+    comprovanteAnexo:tempAnexo
   }
   const cont={
     ...existing,       // preserva assinatura, orcId original e qualquer campo extra
@@ -1740,6 +1743,9 @@ function salvarCont(editId,orcId){
     conts.push(cont)
   }
   DB.set(S.CONTRATOS,conts)
+  // O comprovante anexado fica numa coleção própria (fotos), separado do resto do contrato - assim não
+  // arrisca estourar o limite de tamanho do documento Firestore que guarda TODOS os contratos juntos.
+  if(_fdb&&tempAnexo)_orgCol('fotos').doc('cont_comprovante_'+cont.id).set(tempAnexo).catch(e=>console.warn('comprovante sync:',e))
   closeModal()
   toast('Contrato salvo!','ok')
   navigate('contratos')
@@ -6680,13 +6686,15 @@ function showContView(d){
         const dd=snap.exists?snap.data():d
         const temEntrada=(dd.en||0)>0
         const temSaldo=((dd.tf||0)-(dd.en||0))>0
-        if(!temEntrada&&!temSaldo)return
+        let temAnexo=false
+        try{const snapF=await _orgCol('fotos').doc('cont_comprovante_'+_contId).get();temAnexo=snapF.exists}catch(e){}
+        if(!temEntrada&&!temSaldo&&!temAnexo)return
         const pagoLbl=(lbl,pago)=>`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${pago?'#E8F7EE':'#FFF3E0'};color:${pago?'#1A7A3A':'#B05000'}">${lbl}: ${pago?'✓ Pago':'⏳ Pendente'}</span>`
         box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           ${temEntrada?pagoLbl('Entrada',!!dd.pd):''}
           ${temSaldo?pagoLbl('Saldo',!!dd.sd):''}
         </div>
-        ${(dd.pd||dd.sd)?`<button type="button" onclick="_cvGerarComprovantePagamento()" style="font-size:12px;font-weight:700;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px;padding:8px 14px;cursor:pointer">🧾 Ver Comprovante de Pagamento</button>`:''}`
+        ${(dd.pd||dd.sd||temAnexo)?`<button type="button" onclick="_cvGerarComprovantePagamento()" style="font-size:12px;font-weight:700;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px;padding:8px 14px;cursor:pointer">🧾 Ver Comprovante de Pagamento</button>`:''}`
       }catch(e){console.warn('pagamento check:',e)}
     }
     _checkPagamento()
@@ -6831,17 +6839,23 @@ function _cvGerarComprovante(nome,agora,num,total,ip,device,browser){
 // Comprovante de pagamento (Entrada/Saldo) do contrato - busca o status mais atual direto no Firestore,
 // já que o pagamento pode ter sido marcado como pago depois que o link foi gerado (ver toggleContPago).
 async function _cvGerarComprovantePagamento(){
+  // No celular, abrir a janela só DEPOIS do await (busca no Firestore) é bloqueado como pop-up, porque
+  // deixa de contar como resposta direta ao toque do usuário - por isso abre a janela ANTES de tudo,
+  // com uma tela de carregando, e preenche o conteúdo de verdade só depois que os dados chegarem.
+  const w=window.open('','_blank')
+  if(!w)return
+  w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Carregando…</title></head><body style="font-family:Trebuchet MS,sans-serif;background:#F5F0EA;display:flex;align-items:center;justify-content:center;min-height:100vh;color:#5A4A3A"><p>Carregando comprovante…</p></body></html>')
   const d=window._cvD||{}
   const contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
-  let pd=false,sd=false
+  let pd=false,sd=false,anexo=null
   if(contId&&!contId.startsWith('z.')&&_fdb){
     try{const snap=await _orgCol('contratos_pub').doc(contId).get();if(snap.exists){const dd=snap.data();pd=!!dd.pd;sd=!!dd.sd}}catch(e){}
+    try{const snapF=await _orgCol('fotos').doc('cont_comprovante_'+contId).get();if(snapF.exists)anexo=snapF.data()}catch(e){}
   }
   const entrada=d.en||0,total=d.tf||0,saldo=total-entrada
   const agora=new Date().toLocaleString('pt-BR')
-  const w=window.open('','_blank')
-  if(!w)return
   const linhaPg=(lbl,val,pago)=>`<div class="row"><b>${lbl}:</b><span style="font-weight:700;color:${pago?'#2E7D32':'#B05000'}">${fmt(val)} — ${pago?'PAGO':'PENDENTE'}</span></div>`
+  w.document.open()
   w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
   <title>Comprovante de Pagamento — Contrato Nº ${d.nm||''}</title>
   <style>
@@ -6880,6 +6894,10 @@ async function _cvGerarComprovantePagamento(){
       ${saldo>0?linhaPg('Saldo',saldo,sd):''}
       ${d.pg?`<div class="row"><b>Forma de Pagamento:</b><span>${d.pg}</span></div>`:''}
     </div>
+    ${anexo?`<div class="sec" style="border-bottom:none;border-top:1px solid #EEE8E0">
+      <div class="sec-label">Comprovante Anexado</div>
+      ${(anexo.type||'').startsWith('image/')?`<img src="${anexo.data}" style="max-width:100%;border-radius:6px;border:1px solid #DDD5C8;display:block">`:`<a href="${anexo.data}" download="${anexo.name||'comprovante'}" style="display:inline-flex;align-items:center;gap:8px;padding:10px 16px;background:#F3EEFA;color:#7B5EA7;border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">📎 ${anexo.name||'Abrir arquivo anexado'}</a>`}
+    </div>`:''}
     <div class="footer">Gerado em ${agora} — ${d.n||''} ${d.ea?'— '+d.ea:''}</div>
   </div>
   <div style="text-align:center;margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
