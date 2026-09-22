@@ -1982,15 +1982,41 @@ function prodForm(p){
   </div>
   <div class="frow">
     <div class="fg"><label>Estoque Atual</label><input type="number" id="pEst" value="${p.estoque||0}" min="0"></div>
-    <div class="fg"><label>Estoque Mínimo</label><input type="number" id="pMin" value="${p.minimo||0}" min="0"></div>
+    <div class="fg"><label>Estoque Mínimo</label><input type="number" id="pMin" value="${p.minimo||0}" min="0">
+      <div id="pMinHelperWrap" style="display:${ing?'flex':'none'};align-items:center;gap:6px;margin-top:5px;font-size:11px;color:var(--txt3)">
+        <span>ou quero manter</span>
+        <input type="number" id="pMinEmbalagens" min="0" step="1" placeholder="2" oninput="calcMinEmbalagens()" style="width:44px;padding:3px 5px;border:1.5px solid var(--cream2);border-radius:5px;font-size:11px;text-align:center;font-family:inherit">
+        <span>embalagem(ns)</span>
+        <span id="pMinPrev"></span>
+      </div>
+    </div>
   </div>`
 }
 function togglePrecoCampo(){
   const t=(document.getElementById('pTipo')||{}).value
   const el=document.getElementById('campoPreco')
   const el2=document.getElementById('campoCustoCalc')
+  const el3=document.getElementById('pMinHelperWrap')
   if(el)el.style.display=t==='ingrediente'?'none':''
   if(el2)el2.style.display=t==='ingrediente'?'':'none'
+  if(el3)el3.style.display=t==='ingrediente'?'flex':'none'
+}
+function calcMinEmbalagens(){
+  const numMin=parseFloat((document.getElementById('pMinEmbalagens')||{}).value)||0
+  const qtd=parseFloat((document.getElementById('pCustoQtdUn')||{}).value)||0
+  const und=(document.getElementById('pCustoUnd')||{}).value||'g'
+  const destUn=(document.getElementById('pUn')||{}).value||'g'
+  const prev=document.getElementById('pMinPrev')
+  if(!prev)return
+  if(!numMin||!qtd){prev.innerHTML='';return}
+  let qtdBaseUn=qtd
+  if(und!==destUn){
+    const qb=converterUnidade(qtd,und,destUn)
+    if(qb!=null&&qb>0)qtdBaseUn=qb
+    else{prev.innerHTML='';return}
+  }
+  const total=qtdBaseUn*numMin
+  prev.innerHTML=`= <strong style="color:var(--choc)">${total}${destUn}</strong> <button type="button" onclick="document.getElementById('pMin').value=${total};toast('Estoque mínimo atualizado!','ok')" style="margin-left:4px;font-size:10.5px;color:var(--cara);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">usar</button>`
 }
 function calcProdCusto(){
   const numUn=parseFloat((document.getElementById('pCustoNumUn')||{}).value)||1
