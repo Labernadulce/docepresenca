@@ -3753,11 +3753,12 @@ function atualizarPreviewProd(id,lotes){
     })()}`
 }
 
-function confirmarProducao(id){
-  const r=DB.get(S.RECEITAS).find(x=>x.id===id);if(!r)return
-  const lotes=Math.max(1,parseInt((document.getElementById('prodLotes')||{}).value)||1)
+// Desconta os ingredientes de um lote de produção e credita o item produzido no estoque.
+// Usada tanto ao confirmar uma produção nova quanto ao recalcular um registro editado (mudança de lotes).
+// Guarda pId + qtdDesc (quantidade já convertida pra unidade do produto) em cada ingrediente usado,
+// pra dar pra reverter exatamente depois (excluir/editar registro) sem depender de casar por nome de novo.
+function _aplicarProducao(r,lotes){
   const prods=DB.get(S.PRODUTOS)
-  // calcula custo total antes de descontar
   let custoTotal=0,descontados=0
   const ingUsados=[]
   ;(r.ingredientes||[]).forEach(ing=>{
@@ -3771,25 +3772,51 @@ function confirmarProducao(id){
       const qtdDesc=qtdConv!=null?qtdConv:qtdTotal
       prods[i].estoque=Math.max(0,prods[i].estoque-qtdDesc)
       if(prods[i].custo>0)custoTotal+=qtdDesc*prods[i].custo
-      ingUsados.push({nome:ing.nome,qtd:qtdTotal,und:ing.und})
+      ingUsados.push({nome:ing.nome,qtd:qtdTotal,und:ing.und,pId:prods[i].id,qtdDesc})
       descontados++
     } else {
       ingUsados.push({nome:ing.nome,qtd:qtdTotal,und:ing.und})
     }
   })
-  let produzido=null,msgProd=''
+  let produzido=null
   if(r.prodId){
     const pi=prods.findIndex(p=>p.id===r.prodId)
     if(pi>=0){
       const rendNum=parseFloat((r.rendimento||'').match(/[\d,.]+/)?.[0].replace(',','.'))||1
       const qtdProd=rendNum*lotes
       prods[pi].estoque=(prods[pi].estoque||0)+qtdProd
-      produzido={nome:prods[pi].nome,qtd:qtdProd,un:prods[pi].un}
-      msgProd=` · +${qtdProd%1===0?qtdProd:qtdProd.toFixed(2)} ${prods[pi].un} de "${prods[pi].nome}"`
+      produzido={nome:prods[pi].nome,qtd:qtdProd,un:prods[pi].un,pId:prods[pi].id}
     }
   }
   DB.set(S.PRODUTOS,prods)
-  // salva registro de produção
+  return{ingUsados,custoTotal,descontados,produzido}
+}
+// Devolve ao estoque os ingredientes de um registro de produção já confirmado, e retira o que tinha
+// sido produzido - usada ao excluir um registro ou antes de recalcular ele com um nº de lotes diferente.
+// Casa por pId quando o registro tem (produções novas); registros antigos (sem pId salvo) caem no
+// casamento por nome, igual o desconto original fazia.
+function _reverterEstoqueProducao(rec){
+  const prods=DB.get(S.PRODUTOS)
+  ;(rec.ingredientes||[]).forEach(ing=>{
+    let i=ing.pId?prods.findIndex(p=>p.id===ing.pId):-1
+    if(i<0)i=prods.findIndex(p=>p.tipo==='ingrediente'&&p.nome.toLowerCase().trim()===(ing.nome||'').toLowerCase().trim())
+    if(i>=0){
+      const devolver=ing.qtdDesc!=null?ing.qtdDesc:(parseFloat(ing.qtd)||0)
+      prods[i].estoque=(prods[i].estoque||0)+devolver
+    }
+  })
+  if(rec.produzido){
+    let pi=rec.produzido.pId?prods.findIndex(p=>p.id===rec.produzido.pId):-1
+    if(pi<0)pi=prods.findIndex(p=>p.nome===rec.produzido.nome)
+    if(pi>=0)prods[pi].estoque=Math.max(0,(prods[pi].estoque||0)-(rec.produzido.qtd||0))
+  }
+  DB.set(S.PRODUTOS,prods)
+}
+function confirmarProducao(id){
+  const r=DB.get(S.RECEITAS).find(x=>x.id===id);if(!r)return
+  const lotes=Math.max(1,parseInt((document.getElementById('prodLotes')||{}).value)||1)
+  const{ingUsados,custoTotal,descontados,produzido}=_aplicarProducao(r,lotes)
+  const msgProd=produzido?` · +${produzido.qtd%1===0?produzido.qtd:produzido.qtd.toFixed(2)} ${produzido.un} de "${produzido.nome}"`:''
   const local=(document.getElementById('prodLocal')||{}).value||''
   const cliId=(document.getElementById('prodCli')||{}).value||''
   const cliNome=cliId?(DB.get(S.CLIENTES).find(c=>c.id===cliId)||{}).nome||'':''
@@ -4070,9 +4097,12 @@ function salvarLocalProducao(id){
   all[i].local=v;DB.set(S.PRODUCOES,all);closeModal();render('producao')
 }
 function excluirProducao(id){
-  confirmarModal('Remover este registro do histórico?',()=>{
-    DB.set(S.PRODUCOES,DB.get(S.PRODUCOES).filter(x=>x.id!==id))
-    toast('Registro removido','ok');render('producao')
+  confirmarModal('Remover este registro do histórico? Os ingredientes usados voltam pro estoque, e o que foi produzido é retirado.',()=>{
+    const all=DB.get(S.PRODUCOES)
+    const rec=all.find(x=>x.id===id)
+    if(rec)_reverterEstoqueProducao(rec)
+    DB.set(S.PRODUCOES,all.filter(x=>x.id!==id))
+    toast('Registro removido e estoque ajustado','ok');render('producao')
   })
 }
 function editarProducao(id){
@@ -4095,7 +4125,40 @@ function editarProducao(id){
 function salvarEdicaoProducao(id){
   const all=DB.get(S.PRODUCOES);const i=all.findIndex(x=>x.id===id);if(i<0)return
   all[i].data=(document.getElementById('epData')||{}).value||all[i].data
-  all[i].lotes=parseInt((document.getElementById('epLotes')||{}).value)||all[i].lotes
+  const novoLotes=Math.max(1,parseInt((document.getElementById('epLotes')||{}).value)||all[i].lotes)
+  if(novoLotes!==all[i].lotes){
+    // devolve o estoque do jeito que estava antes deste registro, e desconta de novo com o nº de lotes novo
+    _reverterEstoqueProducao(all[i])
+    const r=DB.get(S.RECEITAS).find(x=>x.id===all[i].recId)
+    if(r){
+      const{ingUsados,custoTotal,produzido}=_aplicarProducao(r,novoLotes)
+      all[i].ingredientes=ingUsados
+      all[i].custo=custoTotal
+      all[i].produzido=produzido
+    }else{
+      // a receita original foi excluída - escala o registro antigo proporcionalmente, sem consultá-la de novo
+      const fator=novoLotes/all[i].lotes
+      const prods=DB.get(S.PRODUTOS)
+      all[i].ingredientes=(all[i].ingredientes||[]).map(ing=>{
+        const novo={...ing,qtd:(parseFloat(ing.qtd)||0)*fator}
+        if(ing.qtdDesc!=null){
+          novo.qtdDesc=ing.qtdDesc*fator
+          const idx=ing.pId?prods.findIndex(p=>p.id===ing.pId):prods.findIndex(p=>p.tipo==='ingrediente'&&p.nome.toLowerCase().trim()===(ing.nome||'').toLowerCase().trim())
+          if(idx>=0)prods[idx].estoque=Math.max(0,(prods[idx].estoque||0)-novo.qtdDesc)
+        }
+        return novo
+      })
+      all[i].custo=(all[i].custo||0)*fator
+      if(all[i].produzido){
+        const novoQ=(all[i].produzido.qtd||0)*fator
+        const pi=all[i].produzido.pId?prods.findIndex(p=>p.id===all[i].produzido.pId):prods.findIndex(p=>p.nome===all[i].produzido.nome)
+        if(pi>=0)prods[pi].estoque=(prods[pi].estoque||0)+novoQ
+        all[i].produzido={...all[i].produzido,qtd:novoQ}
+      }
+      DB.set(S.PRODUTOS,prods)
+    }
+    all[i].lotes=novoLotes
+  }
   const epCliId=(document.getElementById('epCli')||{}).value||''
   all[i].cliId=epCliId
   all[i].cliNome=epCliId?(DB.get(S.CLIENTES).find(c=>c.id===epCliId)||{}).nome||'':''
