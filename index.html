@@ -460,10 +460,18 @@ function calcPlanoPagamento(totalF,entradaPct,entradaData,parcelas,parcela1Data,
         d.setDate(d.getDate()+intervalo*i)
         data=d.toISOString().split('T')[0]
       }
-      plano.parcelas.push({n:i+1,valor:valorParcela,data})
+      plano.parcelas.push({n:i+1,valor:valorParcela,data,pago:false})
     }
   }
   return plano
+}
+// Ao regerar o plano (mudou nº de parcelas/datas/entrada), preserva se cada parcela já tinha sido
+// marcada como paga antes, casando pela posição - senão toda vez que o formulário fosse salvo de novo
+// (ex: só editando uma cláusula) o "pago" de cada parcela voltaria a zero.
+function preservarParcelasPagas(planoNovo,planoAntigo){
+  if(!Array.isArray(planoAntigo))return planoNovo
+  planoNovo.forEach((p,i)=>{if(planoAntigo[i]&&planoAntigo[i].pago)p.pago=true})
+  return planoNovo
 }
 // Lista (uma linha por pagamento) com valor e data de vencimento - usado na prévia do formulário,
 // na impressão, no link do cliente e na cláusula do contrato.
@@ -1664,11 +1672,12 @@ function renderContTable(){
     <td><strong>${clienteNome(c.cliId)}</strong>${c.noivos?`<br><span style="font-size:11px;color:var(--txt3)">${c.noivos}</span>`:''}</td>
     <td>${c.dataEvento?fmtDate(c.dataEvento):'<span style="color:var(--txt3)">—</span>'}</td>
     <td>${c.dataEntrega?fmtDate(c.dataEntrega)+(c.horaEntrega?' '+c.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
-    <td><strong style="color:var(--cara)">${fmt(c.totalF||0)}</strong>${(c.entrada>0&&(c.totalF||0)>c.entrada)?`<br><span onclick="toggleContPago('${c.id}','saldo')" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.saldoPago?'#E8F7EE':'#FFF3E0'};color:${c.saldoPago?'#1A7A3A':'#B05000'}">${c.saldoPago?'✓ Saldo pago':'⏳ Saldo pendente'}</span>`:''}</td>
-    <td>${c.entrada>0?`<strong style="color:var(--txt)">${fmt(c.entrada)}</strong><br><span onclick="toggleContPago('${c.id}','entrada')" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.entradaPaga?'#E8F7EE':'#FFF3E0'};color:${c.entradaPaga?'#1A7A3A':'#B05000'}">${c.entradaPaga?'✓ Paga':'⏳ Pendente'}</span>`:'<span style="color:var(--txt3)">—</span>'}</td>
+    <td><strong style="color:var(--cara)">${fmt(c.totalF||0)}</strong>${(c.entrada>0&&(c.totalF||0)>c.entrada)?`<br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','saldo')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.saldoPago?'#E8F7EE':'#FFF3E0'};color:${c.saldoPago?'#1A7A3A':'#B05000'}">${c.parcelas>1?`${(c.parcelasPlano||[]).filter(p=>p.pago).length}/${c.parcelas} parcelas`:(c.saldoPago?'✓ Saldo pago':'⏳ Saldo pendente')}</span>`:''}</td>
+    <td>${c.entrada>0?`<strong style="color:var(--txt)">${fmt(c.entrada)}</strong><br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','entrada')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.entradaPaga?'#E8F7EE':'#FFF3E0'};color:${c.entradaPaga?'#1A7A3A':'#B05000'}">${c.entradaPaga?'✓ Paga':'⏳ Pendente'}</span>`:'<span style="color:var(--txt3)">—</span>'}</td>
     <td><span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;color:${sc.c};background:${sc.bg}">${sc.l}</span>${c.assinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${c.assinatura.nome}</span>`:''}</td>
     <td style="white-space:nowrap">
       <button class="btn-ic" style="margin-right:4px" title="Imprimir" onclick="imprimirCont('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+      ${c.parcelas>1?`<button class="btn-ic" style="margin-right:4px;color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasCont('${c.id}')">📋</button>`:''}
       <button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Link para Assinatura" onclick="gerarLinkCont('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn-ic" style="margin-right:4px" title="Editar" onclick="editCont('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn-ic btn-d" title="Excluir" onclick="excluirCont('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1784,7 +1793,7 @@ function salvarCont(editId,orcId){
   const parcelaIntervalo=parseInt((document.getElementById('coIntervalo')||{}).value)||undefined
   const parcela1Data=(document.getElementById('coParcela1Data')||{}).value||''
   const planoCalc=calcPlanoPagamento(totalF,entradaPct||0,entradaData||'',parcelasVal,parcela1Data,parcelaIntervalo||30)
-  const parcelasPlano=(entradaPct||parcelas)?planoCalc.parcelas:undefined
+  const parcelasPlano=(entradaPct||parcelas)?preservarParcelasPagas(planoCalc.parcelas,existing.parcelasPlano):undefined
   const entregaTxt=entrega==='entrega'?'entrega':(entrega==='combinar'?'entrega/retirada (a combinar entre as partes)':'retirada')
   const temDatas=parcelas&&parcela1Data
   const restanteTxt=temDatas
@@ -1843,6 +1852,47 @@ function toggleContPago(id,campo){
   toast(conts[i][chave]?'Marcado como pago':'Marcado como pendente','ok')
   // Se o link já foi gerado pro cliente, atualiza o status de pagamento nele também, sem precisar reenviar o link.
   if(_fdb)_orgCol('contratos_pub').doc(id).set({pd:!!conts[i].entradaPaga,sd:!!conts[i].saldoPago},{merge:true}).catch(()=>{})
+}
+// Tela pra marcar cada parcela como paga individualmente e ajustar a data dela (ex: cliente atrasou/adiantou
+// um pagamento) - o formulário de editar contrato só serve pra GERAR o plano do zero; isso aqui edita
+// o plano já existente sem recalcular tudo de novo.
+function verParcelasCont(id){
+  const c=DB.get(S.CONTRATOS).find(x=>x.id===id);if(!c)return
+  const plano=c.parcelasPlano||[]
+  const linha=(lbl,valor,dataVal,pago,idAttr)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
+    <div><strong style="font-size:13px;color:var(--txt)">${lbl}</strong><div style="font-size:12px;color:var(--txt2)">${fmt(valor)}</div></div>
+    <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+      <input type="date" id="pcData_${idAttr}" value="${dataVal||''}" style="padding:7px 9px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--txt2)"><input type="checkbox" id="pcPago_${idAttr}" ${pago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Pago</label>
+    </div>
+  </div>`
+  let body=''
+  if(c.entrada>0)body+=linha('Entrada / Sinal',c.entrada,c.entradaData,c.entradaPaga,'entrada')
+  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i))})
+  if(!body)body='<p style="color:var(--txt3);font-size:13px">Este contrato não tem parcelamento configurado.</p>'
+  openModal('📋 Parcelas — '+clienteNome(c.cliId),body,
+    body?`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarParcelasCont('${id}')">Salvar</button>`:`<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
+}
+function salvarParcelasCont(id){
+  const conts=DB.get(S.CONTRATOS);const i=conts.findIndex(x=>x.id===id);if(i<0)return
+  const c=conts[i]
+  if(c.entrada>0){
+    c.entradaData=(document.getElementById('pcData_entrada')||{}).value||c.entradaData
+    c.entradaPaga=!!(document.getElementById('pcPago_entrada')||{}).checked
+  }
+  if(Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length){
+    c.parcelasPlano=c.parcelasPlano.map((p,idx)=>({...p,
+      data:(document.getElementById('pcData_'+idx)||{}).value||p.data,
+      pago:!!(document.getElementById('pcPago_'+idx)||{}).checked
+    }))
+    // saldoPago (usado no resumo/comprovante) passa a refletir "todas as parcelas pagas".
+    c.saldoPago=c.parcelasPlano.every(p=>p.pago)
+  }
+  DB.set(S.CONTRATOS,conts)
+  if(_fdb)_orgCol('contratos_pub').doc(id).set({pd:!!c.entradaPaga,sd:!!c.saldoPago,pp:c.parcelasPlano||[]},{merge:true}).catch(()=>{})
+  closeModal()
+  renderContTable()
+  toast('Parcelas atualizadas!','ok')
 }
 function excluirCont(id){
   if(!confirm('Excluir este contrato?'))return
@@ -6784,12 +6834,13 @@ function showContView(d){
         let temAnexo=false
         try{const snapF=await _orgCol('fotos').doc('cont_comprovante_'+_contId).get();temAnexo=snapF.exists}catch(e){}
         if(!temEntrada&&!temSaldo&&!temAnexo)return
-        const pagoLbl=(lbl,pago)=>`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${pago?'#E8F7EE':'#FFF3E0'};color:${pago?'#1A7A3A':'#B05000'}">${lbl}: ${pago?'✓ Pago':'⏳ Pendente'}</span>`
+        const pagoLbl=(lbl,pago,data)=>`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${pago?'#E8F7EE':'#FFF3E0'};color:${pago?'#1A7A3A':'#B05000'}">${lbl}: ${pago?'✓ Pago':'⏳ Pendente'}${data&&!pago?' ('+fmtDate(data)+')':''}</span>`
+        const temParcelas=Array.isArray(dd.pp)&&dd.pp.length>0
         box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          ${temEntrada?pagoLbl('Entrada',!!dd.pd):''}
-          ${temSaldo?pagoLbl((dd.pc||1)>1?`Saldo (${dd.pc}x)`:'Saldo',!!dd.sd):''}
+          ${temEntrada?pagoLbl('Entrada',!!dd.pd,dd.ed):''}
+          ${temParcelas?dd.pp.map(p=>pagoLbl(`Parcela ${p.n}/${dd.pp.length}`,!!p.pago,p.data)).join(''):(temSaldo?pagoLbl((dd.pc||1)>1?`Saldo (${dd.pc}x)`:'Saldo',!!dd.sd):'')}
         </div>
-        ${(dd.pd||dd.sd||temAnexo)?`<button type="button" onclick="_cvGerarComprovantePagamento()" style="font-size:12px;font-weight:700;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px;padding:8px 14px;cursor:pointer">🧾 Ver Comprovante de Pagamento</button>`:''}`
+        ${(dd.pd||dd.sd||temAnexo||(temParcelas&&dd.pp.some(p=>p.pago)))?`<button type="button" onclick="_cvGerarComprovantePagamento()" style="font-size:12px;font-weight:700;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px;padding:8px 14px;cursor:pointer">🧾 Ver Comprovante de Pagamento</button>`:''}`
       }catch(e){console.warn('pagamento check:',e)}
     }
     _checkPagamento()
@@ -6942,9 +6993,9 @@ async function _cvGerarComprovantePagamento(){
   w.document.write('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Carregando…</title></head><body style="font-family:Trebuchet MS,sans-serif;background:#F5F0EA;display:flex;align-items:center;justify-content:center;min-height:100vh;color:#5A4A3A"><p>Carregando comprovante…</p></body></html>')
   const d=window._cvD||{}
   const contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
-  let pd=false,sd=false,anexo=null
+  let pd=false,sd=false,anexo=null,parcelasPlano=null
   if(contId&&!contId.startsWith('z.')&&_fdb){
-    try{const snap=await _orgCol('contratos_pub').doc(contId).get();if(snap.exists){const dd=snap.data();pd=!!dd.pd;sd=!!dd.sd}}catch(e){}
+    try{const snap=await _orgCol('contratos_pub').doc(contId).get();if(snap.exists){const dd=snap.data();pd=!!dd.pd;sd=!!dd.sd;if(Array.isArray(dd.pp)&&dd.pp.length)parcelasPlano=dd.pp}}catch(e){}
     try{const snapF=await _orgCol('fotos').doc('cont_comprovante_'+contId).get();if(snapF.exists)anexo=snapF.data()}catch(e){}
   }
   const entrada=d.en||0,total=d.tf||0,saldo=total-entrada
@@ -6986,7 +7037,7 @@ async function _cvGerarComprovantePagamento(){
       <div class="sec-label">Situação do Pagamento</div>
       <div class="row"><b>Valor Total:</b><span style="font-size:15px;font-weight:700;color:#3D3028">${fmt(total)}</span></div>
       ${entrada>0?linhaPg('Entrada / Sinal',entrada,pd):''}
-      ${saldo>0?linhaPg((d.pc||1)>1?`Saldo (${d.pc}x de ${fmt(saldo/d.pc)})`:'Saldo',saldo,sd):''}
+      ${parcelasPlano?parcelasPlano.map(p=>linhaPg(`Parcela ${p.n}/${parcelasPlano.length} (${fmtDate(p.data)})`,p.valor,p.pago)).join(''):(saldo>0?linhaPg((d.pc||1)>1?`Saldo (${d.pc}x de ${fmt(saldo/d.pc)})`:'Saldo',saldo,sd):'')}
       ${d.pg?`<div class="row"><b>Forma de Pagamento:</b><span>${d.pg}</span></div>`:''}
     </div>
     ${anexo?`<div class="sec" style="border-bottom:none;border-top:1px solid #EEE8E0">
