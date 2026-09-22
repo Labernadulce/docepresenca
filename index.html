@@ -1748,6 +1748,8 @@ function toggleContPago(id,campo){
   DB.set(S.CONTRATOS,conts)
   renderContTable()
   toast(conts[i][chave]?'Marcado como pago':'Marcado como pendente','ok')
+  // Se o link já foi gerado pro cliente, atualiza o status de pagamento nele também, sem precisar reenviar o link.
+  if(_fdb)_orgCol('contratos_pub').doc(id).set({pd:!!conts[i].entradaPaga,sd:!!conts[i].saldoPago},{merge:true}).catch(()=>{})
 }
 function excluirCont(id){
   if(!confirm('Excluir este contrato?'))return
@@ -6385,13 +6387,16 @@ async function gerarLinkCont(id){
   const orcs=DB.get(S.ORCAMENTOS)||[]
   const orcFb=c.orcId?orcs.find(x=>x.id===c.orcId):orcs.find(x=>x.cliId===c.cliId&&x.itens&&x.itens.length)
   const itens=(c.itens&&c.itens.length)?c.itens:(orcFb&&orcFb.itens&&orcFb.itens.length?orcFb.itens:[])
+  const _razao=emp.fantasia&&emp.nome&&emp.fantasia!==emp.nome?emp.nome:''
+  const _ea=[[emp.end||'',emp.bairro||''].filter(Boolean).join(', '),[emp.cidade?(emp.cidade+(emp.estado?' / '+emp.estado:'')):'',emp.cep?'CEP: '+emp.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   const payload={
     tp:'c',
-    n:emp.nome||'',er:emp.razao||'',ea:emp.endereco||'',ef:emp.fone||'',ew:emp.whatsapp||'',ee:emp.email||'',
+    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
     tf:c.totalF||0,en:c.entrada||0,ed:c.entradaData||'',
+    pd:!!c.entradaPaga,sd:!!c.saldoPago,oid:c.orcId||(orcFb?orcFb.id:''),
     it:itens,
     c1:c.cl_objeto||'',c2:c.cl_pagamento||'',c3:c.cl_entrega||'',c4:c.cl_cancelamento||'',c5:c.cl_outras||'',
     ob:c.obs||''
@@ -6480,6 +6485,7 @@ function showContView(d){
         ${[d.ew||d.ef,d.ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')}
       </div>
     </div>
+    ${d.oid?`<div style="margin-bottom:16px"><a href="${location.href.split('#')[0]}#orcview=${d.oid}" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7B5EA7;font-weight:700;text-decoration:none;padding:8px 12px;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px">📄 Ver Orçamento Original (proposta)</a></div>`:''}
     <div class="cvct">
       <div>
         <div style="font-size:9px;letter-spacing:2.5px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:6px">Contrato de Prestação de Serviços</div>
@@ -6536,6 +6542,7 @@ function showContView(d){
         &nbsp;&nbsp;|&nbsp;&nbsp;Saldo na entrega: <strong>${fmt(saldo<0?0:saldo)}</strong>
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
+      <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
       <div style="background:#C4B09A;color:#fff;padding:7px 12px;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">CLÁUSULAS DO CONTRATO</div>
@@ -6547,27 +6554,54 @@ function showContView(d){
     ${d.ob?`<div style="margin:18px 0;padding:12px;border:1px solid #DDD9D2;border-radius:4px;font-size:13px;color:#52493E"><strong style="display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E">Observações</strong>${d.ob}</div>`:''}
     <div class="cvsign" id="cvsignSection">
       <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7B5EA7;margin-bottom:14px;display:flex;align-items:center;gap:8px"><span style="font-size:22px">✍️</span> Confirmação de Aceite</div>
-      <p style="font-size:13px;color:#5A4A3A;margin-bottom:16px;line-height:1.65">Leia com atenção todas as cláusulas acima. Para confirmar sua concordância, preencha seu nome e clique em <strong>Assinar e Confirmar</strong>.</p>
+      <p style="font-size:13px;color:#5A4A3A;margin-bottom:16px;line-height:1.65">Leia com atenção todas as cláusulas acima. Preencha seu nome, assine no quadro abaixo com o dedo (ou o mouse) e confirme — não precisa sair desta página.</p>
       <div style="margin-bottom:12px">
         <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:#6A5E52;display:block;margin-bottom:6px">Seu nome completo</label>
         <input id="cvSignName" type="text" value="${d.cn||''}" placeholder="Digite seu nome completo..." style="width:100%;padding:12px 14px;border:2px solid #C4B09A;border-radius:8px;font-size:14px;outline:none;box-sizing:border-box;font-family:'Trebuchet MS',sans-serif">
       </div>
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:18px;font-size:13px;color:#3D3028;line-height:1.55">
+      <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#9A8E82;margin-bottom:6px">Assinatura</div>
+      <div style="position:relative;border:1.5px solid #C4B09A;border-radius:6px;background:#fff;overflow:hidden">
+        <canvas id="cvContSignCanvas" style="width:100%;height:150px;display:block;cursor:crosshair;touch-action:none"></canvas>
+        <div id="cvContSignPlaceholder" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#C4B09A;font-size:13px;pointer-events:none">Assine aqui</div>
+      </div>
+      <button type="button" id="cvContBtnLimparAssin" style="margin-top:6px;background:none;border:none;color:#7B5EA7;font-size:11px;text-decoration:underline;cursor:pointer;padding:0">Limpar assinatura</button>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin:14px 0 18px;font-size:13px;color:#3D3028;line-height:1.55">
         <input type="checkbox" id="cvSignCheck" style="margin-top:3px;width:18px;height:18px;accent-color:#7B5EA7;flex-shrink:0">
         Declaro que li e aceito todos os termos e cláusulas deste contrato de prestação de serviços com <strong>&nbsp;${d.n||'a empresa'}</strong>.
       </label>
-      <button onclick="_cvContSignar('${wa}','${(d.nm||'001')}',${d.tf||0},'${(d.n||'').replace(/'/g,"\\'")}')" style="width:100%;padding:15px;background:linear-gradient(135deg,#7B5EA7,#9B7EC8);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Trebuchet MS',sans-serif;display:flex;align-items:center;justify-content:center;gap:10px">
-        <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-        Assinar e Confirmar via WhatsApp
-      </button>
-      <p style="font-size:10px;color:#9A8E82;text-align:center;margin-top:10px">Ao confirmar, você será redirecionado ao WhatsApp com uma mensagem de aceite.</p>
+      <button type="button" id="cvContBtnAssinar" style="width:100%;padding:15px;background:linear-gradient(135deg,#7B5EA7,#9B7EC8);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;font-family:'Trebuchet MS',sans-serif">✓ Confirmar Assinatura</button>
+      <p style="font-size:11px;color:#9A8E82;text-align:center;margin-top:10px">Prefere avisar por mensagem em vez de assinar aqui? ${wa?`<a href="#" id="cvContWaLink" style="color:#25D366;font-weight:700;text-decoration:none">Falar no WhatsApp</a>`:''}</p>
     </div>
   </div></div>`
-  // Verifica se já foi assinado e bloqueia o formulário se sim
   const _contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
+  const _wa=(d.ew||d.ef||'').replace(/\D/g,'')
+  const _num=String(d.nm||'23501')
+  const _empresaNome=d.n||'a confeitaria'
+  // Quadro de assinatura desenhada (mouse ou dedo, via Pointer Events) - mesmo padrão usado no orçamento.
+  const _signCanvas=document.getElementById('cvContSignCanvas')
+  let _signHasDrawn=false,_signCtx=null
+  if(_signCanvas){
+    _signCtx=_signCanvas.getContext('2d')
+    const _dpr=window.devicePixelRatio||1
+    const _rect=_signCanvas.getBoundingClientRect()
+    _signCanvas.width=_rect.width*_dpr;_signCanvas.height=_rect.height*_dpr
+    _signCtx.scale(_dpr,_dpr)
+    _signCtx.lineWidth=2.4;_signCtx.lineCap='round';_signCtx.lineJoin='round';_signCtx.strokeStyle='#3D3028'
+    let _drawing=false,_lastX=0,_lastY=0
+    const _placeholder=document.getElementById('cvContSignPlaceholder')
+    const _posOf=e=>{const r=_signCanvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+    _signCanvas.addEventListener('pointerdown',e=>{_drawing=true;_signHasDrawn=true;if(_placeholder)_placeholder.style.display='none';const p=_posOf(e);_lastX=p.x;_lastY=p.y;e.preventDefault()})
+    _signCanvas.addEventListener('pointermove',e=>{if(!_drawing)return;const p=_posOf(e);_signCtx.beginPath();_signCtx.moveTo(_lastX,_lastY);_signCtx.lineTo(p.x,p.y);_signCtx.stroke();_lastX=p.x;_lastY=p.y;e.preventDefault()})
+    window.addEventListener('pointerup',()=>{_drawing=false})
+    const _clearBtn=document.getElementById('cvContBtnLimparAssin')
+    if(_clearBtn)_clearBtn.onclick=()=>{_signCtx.clearRect(0,0,_signCanvas.width,_signCanvas.height);_signHasDrawn=false;if(_placeholder)_placeholder.style.display='flex'}
+  }
+  const _waLink=document.getElementById('cvContWaLink')
+  if(_waLink)_waLink.onclick=e=>{e.preventDefault();window.open(`https://wa.me/${_wa}?text=${encodeURIComponent('Olá! Tenho uma dúvida sobre o contrato Nº '+_num+'.')}`,'_blank')}
+  const _assinarBtn=document.getElementById('cvContBtnAssinar')
+  if(_assinarBtn)_assinarBtn.onclick=()=>_cvContSignar(_contId,_wa,_num,d.tf||0,_empresaNome,_signCanvas,()=>_signHasDrawn)
+  // Verifica se já foi assinado e bloqueia o formulário se sim; também confere status de pagamento ao vivo.
   if(_contId&&!_contId.startsWith('z.')){
-    const _wa=(d.ew||d.ef||'').replace(/\D/g,'')
-    const _num=String(d.nm||'23501')
     const _checkSig=async()=>{
       let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
       if(!_fdb)return
@@ -6582,6 +6616,7 @@ function showContView(d){
           <div style="font-size:20px;font-weight:800;color:#2E7D32;margin-bottom:10px">Este contrato já foi assinado</div>
           <div style="font-size:14px;color:#5A4A3A;margin-bottom:4px">Assinado por <strong>${sig.nome}</strong></div>
           <div style="font-size:12px;color:#7A6E62;margin-bottom:4px">${sig.dataFmt||''}</div>
+          ${sig.assinaturaImg?`<img src="${sig.assinaturaImg}" style="max-width:220px;height:60px;object-fit:contain;background:#fff;border:1px solid #C4B09A;border-radius:6px;margin:10px auto 4px;display:block">`:''}
           ${sig.ip?`<div style="font-size:11px;color:#9A8E82;margin-bottom:2px">IP: ${sig.ip}</div>`:''}
           ${sig.device?`<div style="font-size:11px;color:#9A8E82;margin-bottom:2px">${sig.device==='Dispositivo Móvel'?'📱':'💻'} ${sig.device}${sig.browser?' — '+sig.browser:''}</div>`:''}
           <div style="height:1px;background:#E0D8CE;margin:18px 0"></div>
@@ -6589,24 +6624,45 @@ function showContView(d){
             Este contrato já possui assinatura digital registrada e não pode ser assinado novamente.
           </div>
           <p style="font-size:14px;color:#5A4A3A;margin-bottom:20px;line-height:1.7">
-            Em caso de dúvidas, entre em contato com a <strong>Laberna Dulce</strong>.
+            Em caso de dúvidas, entre em contato com a <strong>${_empresaNome}</strong>.
           </p>
           ${_wa?`<a href="https://wa.me/${_wa}?text=${encodeURIComponent('Olá! Tenho uma dúvida sobre o contrato Nº '+_num+'.')}" target="_blank" style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;background:#25D366;color:#fff;border-radius:10px;text-decoration:none;font-size:15px;font-weight:700;font-family:Trebuchet MS,sans-serif">
             <svg width="22" height="22" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>
-            Falar com a Laberna Dulce
-          </a>`:'<p style="font-size:13px;color:#7A6E62">Entre em contato: Laberna Dulce — (11) 99934-9960</p>'}
+            Falar com ${_empresaNome}
+          </a>`:`<p style="font-size:13px;color:#7A6E62">${d.ef?'Entre em contato: '+_empresaNome+' — '+d.ef:''}</p>`}
         </div>`
       }catch(e){console.warn('sig check:',e)}
     }
     _checkSig()
+    const _checkPagamento=async()=>{
+      let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
+      if(!_fdb)return
+      const box=document.getElementById('cvPagBox');if(!box)return
+      try{
+        const snap=await _orgCol('contratos_pub').doc(_contId).get()
+        const dd=snap.exists?snap.data():d
+        const temEntrada=(dd.en||0)>0
+        const temSaldo=((dd.tf||0)-(dd.en||0))>0
+        if(!temEntrada&&!temSaldo)return
+        const pagoLbl=(lbl,pago)=>`<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;background:${pago?'#E8F7EE':'#FFF3E0'};color:${pago?'#1A7A3A':'#B05000'}">${lbl}: ${pago?'✓ Pago':'⏳ Pendente'}</span>`
+        box.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          ${temEntrada?pagoLbl('Entrada',!!dd.pd):''}
+          ${temSaldo?pagoLbl('Saldo',!!dd.sd):''}
+        </div>
+        ${(dd.pd||dd.sd)?`<button type="button" onclick="_cvGerarComprovantePagamento()" style="font-size:12px;font-weight:700;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px;padding:8px 14px;cursor:pointer">🧾 Ver Comprovante de Pagamento</button>`:''}`
+      }catch(e){console.warn('pagamento check:',e)}
+    }
+    _checkPagamento()
   }
 }
 
-async function _cvContSignar(wa,num,total,empresa){
+async function _cvContSignar(contId,wa,num,total,empresa,signCanvas,hasDrawnFn){
   const nome=(document.getElementById('cvSignName')||{}).value?.trim()
   const check=document.getElementById('cvSignCheck')?.checked
-  if(!nome){alert('Por favor, digite seu nome completo para assinar.');return}
-  if(!check){alert('Você precisa marcar que leu e aceita os termos do contrato.');return}
+  if(!nome){toast('Digite seu nome completo para assinar.','err');return}
+  if(signCanvas&&!hasDrawnFn()){toast('Assine no quadro antes de confirmar.','err');return}
+  if(!check){toast('Você precisa marcar que leu e aceita os termos do contrato.','err');return}
+  const assinaturaImg=signCanvas?signCanvas.toDataURL('image/png'):null
   const agora=new Date().toLocaleString('pt-BR')
   const isoNow=new Date().toISOString()
   const numFmt=String(num)
@@ -6628,6 +6684,7 @@ async function _cvContSignar(wa,num,total,empresa){
       <div style="font-size:20px;font-weight:800;color:#2E7D32;margin-bottom:4px">Assinatura Confirmada!</div>
       <div style="font-size:13px;color:#7A6E62">Comprovante sendo gerado...</div>
     </div>
+    ${assinaturaImg?`<img src="${assinaturaImg}" style="max-width:220px;height:60px;object-fit:contain;background:#fff;border:1px solid #C4B09A;border-radius:6px;margin:0 auto 14px;display:block">`:''}
     <div style="background:#F7FFF7;border:1.5px solid #66BB6A;border-radius:10px;padding:16px 18px;font-size:12px;line-height:2.1;color:#2E7D32">
       <div><strong style="display:inline-block;min-width:130px;color:#1B5E20">Assinado por:</strong> ${nome}</div>
       <div><strong style="display:inline-block;min-width:130px;color:#1B5E20">Data e Hora:</strong> ${agora}</div>
@@ -6637,10 +6694,9 @@ async function _cvContSignar(wa,num,total,empresa){
     </div>
   </div>`
   // Grava assinatura no Firestore com todos os dados
-  const contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
   if(contId&&!contId.startsWith('z.')){
     let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
-    if(_fdb)try{await _orgCol('assinaturas').doc(contId).set({nome,data:isoNow,dataFmt:agora,num:numFmt,ip,device,browser})}catch(e){console.warn('sig write:',e)}
+    if(_fdb)try{await _orgCol('assinaturas').doc(contId).set({nome,data:isoNow,dataFmt:agora,num:numFmt,ip,device,browser,assinaturaImg})}catch(e){console.warn('sig write:',e)}
   }
   // PDF comprovante
   setTimeout(()=>_cvGerarComprovante(nome,agora,numFmt,total,ip,device,browser),800)
@@ -6708,7 +6764,7 @@ function _cvGerarComprovante(nome,agora,num,total,ip,device,browser){
       <div class="row"><b>Endereço IP:</b><span>${ip||'Não disponível'}</span></div>
       <div class="row"><b>Dispositivo:</b><span>${device||'Não identificado'}</span></div>
       <div class="row"><b>Navegador:</b><span>${browser||'Não identificado'}</span></div>
-      <div class="row"><b>Método:</b><span>Aceite Digital — confirmação via WhatsApp</span></div>
+      <div class="row"><b>Método:</b><span>Assinatura desenhada digitalmente</span></div>
     </div>
     <div class="decl">
       <p>Eu, <strong>${nome}</strong>, declaro que li e aceito integralmente todos os termos e cláusulas do presente contrato de prestação de serviços${d.n?' com '+d.n:''}, no valor total de <strong>${fmt(total)}</strong>.</p>
@@ -6726,6 +6782,67 @@ function _cvGerarComprovante(nome,agora,num,total,ip,device,browser){
       <div style="flex:1;border-top:1.5px solid #3D3028;padding-top:8px;text-align:center;font-size:11px;color:#7A6E62">${d.n||'Empresa'}<br>Contratada</div>
     </div>
     <div class="footer">Gerado em ${agora} — ${d.n||'Laberna Dulce'} ${d.ea?'— '+d.ea:''}</div>
+  </div>
+  <div style="text-align:center;margin-top:16px">
+    <button onclick="window.print()" style="padding:12px 28px;background:#3D3028;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">🖨️ Salvar / Imprimir Comprovante</button>
+  </div>
+  </body></html>`)
+  w.document.close()
+}
+
+// Comprovante de pagamento (Entrada/Saldo) do contrato - busca o status mais atual direto no Firestore,
+// já que o pagamento pode ter sido marcado como pago depois que o link foi gerado (ver toggleContPago).
+async function _cvGerarComprovantePagamento(){
+  const d=window._cvD||{}
+  const contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
+  let pd=false,sd=false
+  if(contId&&!contId.startsWith('z.')&&_fdb){
+    try{const snap=await _orgCol('contratos_pub').doc(contId).get();if(snap.exists){const dd=snap.data();pd=!!dd.pd;sd=!!dd.sd}}catch(e){}
+  }
+  const entrada=d.en||0,total=d.tf||0,saldo=total-entrada
+  const agora=new Date().toLocaleString('pt-BR')
+  const w=window.open('','_blank')
+  if(!w)return
+  const linhaPg=(lbl,val,pago)=>`<div class="row"><b>${lbl}:</b><span style="font-weight:700;color:${pago?'#2E7D32':'#B05000'}">${fmt(val)} — ${pago?'PAGO':'PENDENTE'}</span></div>`
+  w.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+  <title>Comprovante de Pagamento — Contrato Nº ${d.nm||''}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Trebuchet MS',sans-serif;background:#F5F0EA;color:#1C1A18;padding:32px 24px}
+    .doc{max-width:680px;margin:0 auto;background:#fff;border:1px solid #DDD5C8;border-radius:6px;overflow:hidden}
+    .cab{background:#3D3028;color:#fff;padding:24px 28px;display:flex;align-items:center;justify-content:space-between}
+    .cab-title{font-size:13px;letter-spacing:2px;text-transform:uppercase;opacity:.7;margin-bottom:4px}
+    .cab-num{font-size:24px;font-weight:800;font-family:'Palatino Linotype',serif;color:#E8C97A}
+    .sec{padding:20px 28px;border-bottom:1px solid #EEE8E0}
+    .sec-label{font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:10px}
+    .row{display:flex;gap:8px;margin-bottom:6px;font-size:13px}
+    .row b{color:#3D3028;min-width:140px;font-weight:600}
+    .row span{color:#5A4A3A}
+    .footer{background:#FAF7F4;padding:16px 28px;font-size:10px;color:#9A8E82;text-align:center;border-top:1px solid #EEE8E0}
+    @media print{body{background:#fff;padding:0}.doc{border:none;border-radius:0}}
+  </style></head><body>
+  <div class="doc">
+    <div class="cab">
+      <div>
+        <div class="cab-title">Comprovante de Pagamento</div>
+        <div class="cab-num">Contrato Nº ${d.nm||''}</div>
+        ${d.n?`<div style="font-size:12px;opacity:.8;margin-top:4px">${d.n}</div>`:''}
+      </div>
+      <div style="font-size:32px">🧾</div>
+    </div>
+    <div class="sec">
+      <div class="sec-label">Contratante</div>
+      <div class="row"><b>Nome:</b><span>${d.cn||'—'}</span></div>
+      ${d.cf?`<div class="row"><b>Telefone:</b><span>${d.cf}</span></div>`:''}
+    </div>
+    <div class="sec" style="border-bottom:none">
+      <div class="sec-label">Situação do Pagamento</div>
+      <div class="row"><b>Valor Total:</b><span style="font-size:15px;font-weight:700;color:#3D3028">${fmt(total)}</span></div>
+      ${entrada>0?linhaPg('Entrada / Sinal',entrada,pd):''}
+      ${saldo>0?linhaPg('Saldo',saldo,sd):''}
+      ${d.pg?`<div class="row"><b>Forma de Pagamento:</b><span>${d.pg}</span></div>`:''}
+    </div>
+    <div class="footer">Gerado em ${agora} — ${d.n||''} ${d.ea?'— '+d.ea:''}</div>
   </div>
   <div style="text-align:center;margin-top:16px">
     <button onclick="window.print()" style="padding:12px 28px;background:#3D3028;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">🖨️ Salvar / Imprimir Comprovante</button>
