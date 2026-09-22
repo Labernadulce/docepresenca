@@ -7086,7 +7086,9 @@ const MASTER_ADMIN_PASS='Laisa@100'
 let _tenantLoginUser=LOGIN_USER,_tenantLoginHash=LOGIN_HASH,_tenantNome='',_tenantConfigLoaded=(window.__TENANT_SLUG__==='laberna-dulce')
 // Metadados de cada empresa (nome/login) ficam guardados como um documento especial dentro da coleção 'store'
 // (não dá pra criar uma coleção nova tipo 'orgs' - ver nota em _orgCol). Prefixo fixo pra poder listar depois.
-function _tenantMetaDocId(slug){ return '__tenant__'+slug }
+// Obs: NÃO pode ser '__algumacoisa__' (prefixo E sufixo com underscore duplo) - o Firestore trata
+// esse padrão de ID como reservado e rejeita até como limite de range query (erro "invalid-argument").
+function _tenantMetaDocId(slug){ return 'tenant_meta_'+slug }
 async function _loadTenantAuthConfig(){
   if(window.__TENANT_SLUG__==='laberna-dulce'){_tenantConfigLoaded=true;return}
   try{
@@ -7171,7 +7173,7 @@ async function maRenderLista(){
   const el=document.getElementById('maLista');if(!el)return
   el.innerHTML='Carregando empresas...'
   try{
-    const _pfx='__tenant__'
+    const _pfx='tenant_meta_'
     const snap=await _fdb.collection('store')
       .orderBy(firebase.firestore.FieldPath.documentId())
       .startAt(_pfx).endAt(_pfx+'').get()
