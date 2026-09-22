@@ -7246,6 +7246,22 @@ async function maSalvarModulos(slug){
     if(msg){msg.textContent='Salvo!';msg.style.color='#2EA855';setTimeout(()=>{if(msg)msg.textContent=''},2500)}
   }catch(e){console.warn(e);if(msg){msg.textContent='Erro ao salvar.';msg.style.color='#B84040'}}
 }
+function maToggleSenha(slug){
+  const el=document.getElementById('maSenha_'+slug)
+  if(el)el.style.display=(el.style.display==='none')?'block':'none'
+}
+async function maSalvarSenha(slug){
+  const input=document.getElementById('maSenhaNova_'+slug)
+  const msg=document.getElementById('maSenhaMsg_'+slug)
+  const novaSenha=(input&&input.value||'').trim()
+  if(!novaSenha){if(msg){msg.textContent='Digite a nova senha.';msg.style.color='#B84040'}return}
+  try{
+    const loginHash=await sha256(novaSenha)
+    await _fdb.collection('store').doc(_tenantMetaDocId(slug)).set({loginHash},{merge:true})
+    if(input)input.value=''
+    if(msg){msg.textContent='Senha atualizada!';msg.style.color='#2EA855';setTimeout(()=>{if(msg)msg.textContent=''},2500)}
+  }catch(e){console.warn(e);if(msg){msg.textContent='Erro ao salvar.';msg.style.color='#B84040'}}
+}
 async function maToggleBloqueio(slug,novoValor){
   try{
     await _fdb.collection('store').doc(_tenantMetaDocId(slug)).set({bloqueada:novoValor},{merge:true})
@@ -7287,6 +7303,7 @@ async function maRenderLista(){
         </div>
         <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <span onclick="maToggleMod('${r.slug}')" style="font-size:11px;color:#52493E;background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">⚙️ Módulos liberados</span>
+          <span onclick="maToggleSenha('${r.slug}')" style="font-size:11px;color:#52493E;background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">🔑 Trocar senha</span>
           <span onclick="maToggleBloqueio('${r.slug}',${!r.bloqueada})" style="font-size:11px;color:${r.bloqueada?'#2EA855':'#B8912A'};background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">${r.bloqueada?'🔓 Desbloquear acesso':'🔒 Bloquear acesso'}</span>
           <span onclick="maExcluirEmpresa('${r.slug}')" style="font-size:11px;color:#B84040;background:#FCEAEA;border:1px solid #F3D5D5;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">🗑️ Excluir</span>
         </div>
@@ -7295,6 +7312,13 @@ async function maRenderLista(){
           <div style="display:flex;gap:10px;align-items:center">
             <button onclick="maSalvarModulos('${r.slug}')" style="padding:7px 14px;background:#B8912A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Salvar</button>
             <span id="maModMsg_${r.slug}" style="font-size:11px"></span>
+          </div>
+        </div>
+        <div id="maSenha_${r.slug}" style="display:none;margin-top:10px;padding:12px;background:#F8F7F4;border-radius:8px">
+          <input id="maSenhaNova_${r.slug}" type="text" placeholder="Nova senha" style="width:100%;padding:9px 11px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:12.5px;box-sizing:border-box;font-family:inherit;margin-bottom:8px">
+          <div style="display:flex;gap:10px;align-items:center">
+            <button onclick="maSalvarSenha('${r.slug}')" style="padding:7px 14px;background:#B8912A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Salvar nova senha</button>
+            <span id="maSenhaMsg_${r.slug}" style="font-size:11px"></span>
           </div>
         </div>
       </div>`).join('')
