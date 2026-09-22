@@ -6442,6 +6442,19 @@ function copiarLinkCont(){
   }).catch(()=>{el.select();document.execCommand('copy')})
 }
 
+// Abre o orçamento original a partir do link do contrato sem recarregar a página - um <a href="#orcview=..."> sozinho
+// só troca a URL (não recarrega), e checkClientView() só roda uma vez no carregamento inicial da página.
+async function _cvAbrirOrcamento(oid){
+  if(!oid)return
+  history.pushState(null,'',location.href.split('#')[0]+'#orcview='+oid)
+  let t=0;while(!_fbAuthReady&&t<30){await new Promise(r=>setTimeout(r,300));t++}
+  if(!_fdb){toast('Firebase indisponível no momento.','err');return}
+  try{
+    const snap=await _orgCol('contratos_pub').doc(oid).get()
+    if(!snap.exists){toast('Orçamento não encontrado.','err');return}
+    showClientView(snap.data(),oid)
+  }catch(e){console.warn(e);toast('Erro ao abrir o orçamento.','err')}
+}
 function showContView(d){
   window._cvD=d // guarda para o comprovante PDF
   const ov=document.getElementById('clientViewOverlay')
@@ -6485,7 +6498,7 @@ function showContView(d){
         ${[d.ew||d.ef,d.ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')}
       </div>
     </div>
-    ${d.oid?`<div style="margin-bottom:16px"><a href="${location.href.split('#')[0]}#orcview=${d.oid}" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7B5EA7;font-weight:700;text-decoration:none;padding:8px 12px;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px">📄 Ver Orçamento Original (proposta)</a></div>`:''}
+    ${d.oid?`<div style="margin-bottom:16px"><a href="${location.href.split('#')[0]}#orcview=${d.oid}" onclick="event.preventDefault();_cvAbrirOrcamento('${d.oid}')" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7B5EA7;font-weight:700;text-decoration:none;padding:8px 12px;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px">📄 Ver Orçamento Original (proposta)</a></div>`:''}
     <div class="cvct">
       <div>
         <div style="font-size:9px;letter-spacing:2.5px;color:#B8912A;text-transform:uppercase;font-weight:700;margin-bottom:6px">Contrato de Prestação de Serviços</div>
