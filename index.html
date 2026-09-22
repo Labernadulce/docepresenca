@@ -431,8 +431,7 @@ function getPgtos(){const custom=DB.get(S.PGTOS);return(Array.isArray(custom)&&c
 function pgtoOpts(sel){return getPgtos().map(p=>`<option value="${p}" ${sel===p?'selected':''}>${p}</option>`).join('')}
 function fmtN(n){return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n||0)}
 function fmtDate(d){if(!d)return'-';return new Date(d+'T12:00:00').toLocaleDateString('pt-BR')}
-// Monta o texto da condição de pagamento (entrada + restante parcelado) usado em orçamento/contrato,
-// tanto na tela do vendedor quanto no link/impressão que vai pro cliente.
+// Monta o texto compacto (uma linha) da condição de pagamento - usado em célula de info/resumo.
 function condPagamentoTxt(totalF,entradaPct,parcelas){
   const pct=entradaPct||0,n=parcelas&&parcelas>1?parcelas:1
   if(!pct&&n<=1)return''
@@ -441,6 +440,79 @@ function condPagamentoTxt(totalF,entradaPct,parcelas){
   if(pct>0&&n>1)return`Entrada de ${fmt(entradaVal)} (${pct}%) + restante em ${n}x de ${fmt(restante/n)}`
   if(pct>0)return`Entrada de ${fmt(entradaVal)} (${pct}%) + saldo de ${fmt(restante)}`
   return`Em ${n}x de ${fmt(totalF/n)}`
+}
+// Plano de pagamento de verdade: não só "quantas vezes", mas a DATA de vencimento de cada parcela -
+// a entrada tem sua data, e cada parcela do restante vence a cada X dias a partir da data da 1ª.
+function calcPlanoPagamento(totalF,entradaPct,entradaData,parcelas,parcela1Data,intervaloDias){
+  const pct=entradaPct||0
+  const n=parcelas&&parcelas>1?parcelas:1
+  const entradaVal=pct>0?totalF*pct/100:0
+  const restante=totalF-entradaVal
+  const plano={entrada:null,parcelas:[]}
+  if(entradaVal>0)plano.entrada={valor:entradaVal,data:entradaData||''}
+  if(restante>0){
+    const valorParcela=restante/n
+    const intervalo=intervaloDias||30
+    for(let i=0;i<n;i++){
+      let data=''
+      if(parcela1Data){
+        const d=new Date(parcela1Data+'T12:00:00')
+        d.setDate(d.getDate()+intervalo*i)
+        data=d.toISOString().split('T')[0]
+      }
+      plano.parcelas.push({n:i+1,valor:valorParcela,data})
+    }
+  }
+  return plano
+}
+// Lista (uma linha por pagamento) com valor e data de vencimento - usado na prévia do formulário,
+// na impressão, no link do cliente e na cláusula do contrato.
+function planoPagamentoLinhas(plano){
+  const linhas=[]
+  if(plano.entrada)linhas.push(`Entrada: ${fmt(plano.entrada.valor)}${plano.entrada.data?' — vencimento '+fmtDate(plano.entrada.data):' — sem data definida'}`)
+  plano.parcelas.forEach(p=>linhas.push(`Parcela ${p.n}/${plano.parcelas.length}: ${fmt(p.valor)}${p.data?' — vencimento '+fmtDate(p.data):' — sem data definida'}`))
+  return linhas
+}
+// Campos de formulário (entrada + parcelamento com datas) - reaproveitado no orçamento e no contrato,
+// só muda o prefixo dos ids (evita duplicar esse bloco inteiro duas vezes).
+function condPagamentoFieldsHtml(prefix,o){
+  o=o||{}
+  const plano=o.parcelasPlano||[]
+  return`<div class="fg">
+    <label>Condição de Pagamento <span style="font-weight:400;text-transform:none;color:var(--txt3)">— opcional, aparece na proposta/contrato pro cliente</span></label>
+    <div class="frow t3" style="margin:0 0 8px">
+      <div class="fg">
+        <label style="font-size:11px">Entrada / Sinal (%)</label>
+        <input type="number" id="${prefix}EntradaPct" value="${o.entradaPct||''}" min="0" max="100" placeholder="Ex: 50" oninput="calcParcelasPreview('${prefix}')">
+        <div style="display:flex;gap:4px;margin-top:5px;flex-wrap:wrap">
+          <span onclick="document.getElementById('${prefix}EntradaPct').value=50;calcParcelasPreview('${prefix}')" style="font-size:10px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:3px 7px;cursor:pointer">50%</span>
+          <span onclick="document.getElementById('${prefix}EntradaPct').value=30;calcParcelasPreview('${prefix}')" style="font-size:10px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:3px 7px;cursor:pointer">30%</span>
+          <span onclick="document.getElementById('${prefix}EntradaPct').value=100;calcParcelasPreview('${prefix}')" style="font-size:10px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:3px 7px;cursor:pointer">100%</span>
+          <span onclick="document.getElementById('${prefix}EntradaPct').value='';calcParcelasPreview('${prefix}')" style="font-size:10px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:3px 7px;cursor:pointer">Limpar</span>
+        </div>
+      </div>
+      <div class="fg"><label style="font-size:11px">Vencimento da Entrada</label><input type="date" id="${prefix}EntradaData" value="${o.entradaData||''}" oninput="calcParcelasPreview('${prefix}')"></div>
+      <div class="fg"><label style="font-size:11px">Restante em quantas vezes</label><div style="display:flex;gap:6px;align-items:center"><input type="number" id="${prefix}Parcelas" value="${o.parcelas||1}" min="1" max="24" style="width:60px" oninput="calcParcelasPreview('${prefix}')"><span style="font-size:12px;color:var(--txt2)">x</span></div></div>
+    </div>
+    <div class="frow" style="margin:0 0 8px">
+      <div class="fg"><label style="font-size:11px">Vencimento da 1ª parcela</label><input type="date" id="${prefix}Parcela1Data" value="${plano[0]?plano[0].data:''}" oninput="calcParcelasPreview('${prefix}')"></div>
+      <div class="fg"><label style="font-size:11px">Repetir a cada (dias)</label><input type="number" id="${prefix}Intervalo" value="${o.parcelaIntervalo||30}" min="1" oninput="calcParcelasPreview('${prefix}')"></div>
+    </div>
+    <div id="${prefix}ParcelasLista" style="font-size:12px;color:var(--txt2);line-height:1.9"></div>
+  </div>`
+}
+// Lê os campos acima e recalcula o plano de pagamento - chamada de dentro de calcOrcTotals()/contCalcRestante(),
+// que já sabem o valor total certo (itens-desconto no orçamento, campo Valor Total no contrato).
+function calcParcelasPreview(prefix,totalF){
+  const pct=parseFloat((document.getElementById(prefix+'EntradaPct')||{}).value)||0
+  const entradaData=(document.getElementById(prefix+'EntradaData')||{}).value||''
+  const n=Math.max(1,parseInt((document.getElementById(prefix+'Parcelas')||{}).value)||1)
+  const parcela1Data=(document.getElementById(prefix+'Parcela1Data')||{}).value||''
+  const intervalo=parseInt((document.getElementById(prefix+'Intervalo')||{}).value)||30
+  const plano=calcPlanoPagamento(totalF||0,pct,entradaData,n,parcela1Data,intervalo)
+  const lista=document.getElementById(prefix+'ParcelasLista')
+  if(lista)lista.innerHTML=planoPagamentoLinhas(plano).map(l=>`<div>${l}</div>`).join('')
+  return plano
 }
 function modalidadeLabel(v,emoji){
   if(v==='entrega')return emoji?'🚚 Laberna Dulce Entrega':'Laberna Dulce Entrega'
@@ -1203,30 +1275,7 @@ function novoOrc(fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${new Date(Date.now()+30*86400000).toISOString().split('T')[0]}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="0" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts('')}</select></div>
-    ${fromRomaneio?'':`<div class="fg">
-      <label>Condição de Pagamento <span style="font-weight:400;text-transform:none;color:var(--txt3)">— opcional, aparece na proposta pro cliente</span></label>
-      <div class="frow" style="margin:0 0 8px">
-        <div>
-          <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">Entrada / Sinal</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="number" id="oEntradaPct" value="" min="0" max="100" placeholder="Ex: 50" style="width:90px" oninput="calcOrcTotals()">
-            <span style="font-size:13px;color:var(--txt2)">%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=50;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">50%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=30;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">30%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=100;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">100%</span>
-            <span onclick="document.getElementById('oEntradaPct').value='';document.getElementById('oParcelas').value=1;calcOrcTotals()" style="font-size:11px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:4px 9px;cursor:pointer">Limpar</span>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">Restante parcelado em</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="number" id="oParcelas" value="1" min="1" max="24" style="width:70px" oninput="calcOrcTotals()">
-            <span style="font-size:13px;color:var(--txt2)">vez(es)</span>
-          </div>
-        </div>
-      </div>
-      <div id="oEntradaPreview" style="font-size:12px;color:var(--txt2)"></div>
-    </div>`}
+    ${fromRomaneio?'':condPagamentoFieldsHtml('o',null)}
     ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
     <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
@@ -1364,23 +1413,7 @@ function calcOrcTotals(){
   }
   const totalLbl=tempOpcoes.length>1?'Total — '+(tempOpcoes[activeOpcaoIdx].nome||'Opção '+(activeOpcaoIdx+1)):'Total'
   el.innerHTML=compareHtml+`<div class="totbox"><div class="trow"><span>Subtotal</span><span>${fmt(activeTotal)}</span></div><div class="trow"><span>Desconto</span><span style="color:var(--bad)">- ${fmt(desc)}</span></div><div class="trow bold"><span>${totalLbl}</span><span>${fmt(activeTotal-desc)}</span></div></div>`
-  const prevEl=document.getElementById('oEntradaPreview')
-  if(prevEl){
-    const pct=parseFloat((document.getElementById('oEntradaPct')||{}).value)||0
-    const parcelas=Math.max(1,parseInt((document.getElementById('oParcelas')||{}).value)||1)
-    const totalF=activeTotal-desc
-    if(pct>0){
-      const entradaVal=totalF*pct/100
-      const restante=totalF-entradaVal
-      prevEl.textContent=parcelas>1
-        ?`Entrada: ${fmt(entradaVal)} (${pct}%) · Restante em ${parcelas}x de ${fmt(restante/parcelas)}`
-        :`Entrada: ${fmt(entradaVal)} (${pct}%) · Saldo: ${fmt(restante)}`
-    }else if(parcelas>1){
-      prevEl.textContent=`Em ${parcelas}x de ${fmt(totalF/parcelas)} (sem entrada)`
-    }else{
-      prevEl.textContent=''
-    }
-  }
+  calcParcelasPreview('o',activeTotal-desc)
 }
 function editOrc(id,fromRomaneio){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
@@ -1397,30 +1430,7 @@ function editOrc(id,fromRomaneio){
     <div class="frow"><div class="fg"><label>Validade</label><input type="date" id="oValid" value="${o.validade||''}"></div>
     <div class="fg"><label>Desconto (R$)</label><input type="number" id="oDesc" value="${o.desc||0}" min="0" oninput="calcOrcTotals()"></div></div>
     <div class="fg"><label>Forma de Pagamento</label><select id="oPgto">${pgtoOpts(o.pgto||'')}</select></div>
-    ${fromRomaneio?'':`<div class="fg">
-      <label>Condição de Pagamento <span style="font-weight:400;text-transform:none;color:var(--txt3)">— opcional, aparece na proposta pro cliente</span></label>
-      <div class="frow" style="margin:0 0 8px">
-        <div>
-          <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">Entrada / Sinal</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="number" id="oEntradaPct" value="${o.entradaPct||''}" min="0" max="100" placeholder="Ex: 50" style="width:90px" oninput="calcOrcTotals()">
-            <span style="font-size:13px;color:var(--txt2)">%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=50;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">50%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=30;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">30%</span>
-            <span onclick="document.getElementById('oEntradaPct').value=100;calcOrcTotals()" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">100%</span>
-            <span onclick="document.getElementById('oEntradaPct').value='';document.getElementById('oParcelas').value=1;calcOrcTotals()" style="font-size:11px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:4px 9px;cursor:pointer">Limpar</span>
-          </div>
-        </div>
-        <div>
-          <div style="font-size:11px;color:var(--txt2);margin-bottom:4px">Restante parcelado em</div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="number" id="oParcelas" value="${o.parcelas||1}" min="1" max="24" style="width:70px" oninput="calcOrcTotals()">
-            <span style="font-size:13px;color:var(--txt2)">vez(es)</span>
-          </div>
-        </div>
-      </div>
-      <div id="oEntradaPreview" style="font-size:12px;color:var(--txt2)"></div>
-    </div>`}
+    ${fromRomaneio?'':condPagamentoFieldsHtml('o',o)}
     ${fromRomaneio?'':`<div style="margin-bottom:6px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Opções de pacote <span style="font-weight:400;text-transform:none;color:var(--txt3)">— proponha mais de uma opção pro cliente escolher</span></div>
     <div id="oOpcoesTabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>`}
     <div style="margin-bottom:8px;font-size:11px;font-weight:700;color:var(--txt2);text-transform:uppercase;letter-spacing:.5px">Itens do Orçamento</div>
@@ -1473,15 +1483,21 @@ function salvarOrc(){
   const entrega=entregaSel?entregaSel.value:'retira'
   const endEntrega=entrega==='entrega'?v('oEndEntrega')||undefined:undefined
   const entradaPct=parseFloat((document.getElementById('oEntradaPct')||{}).value)||undefined
+  const entradaData=(document.getElementById('oEntradaData')||{}).value||undefined
   const parcelasVal=parseInt((document.getElementById('oParcelas')||{}).value)||1
   const parcelas=parcelasVal>1?parcelasVal:undefined
+  const parcelaIntervalo=parseInt((document.getElementById('oIntervalo')||{}).value)||undefined
+  const parcela1Data=(document.getElementById('oParcela1Data')||{}).value||''
+  // Guarda o plano completo (entrada+parcelas com data de vencimento de cada um), não só a quantidade.
+  const planoCalc=calcPlanoPagamento(totalF,entradaPct||0,entradaData||'',parcelasVal,parcela1Data,parcelaIntervalo||30)
+  const parcelasPlano=(entradaPct||parcelas)?planoCalc.parcelas:undefined
   const orcs=DB.get(S.ORCAMENTOS)
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
-    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,entradaPct,parcelas,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,entradaPct,entradaData,parcelas,parcelaIntervalo,parcelasPlano,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio atualizado!':'Orçamento atualizado!','ok')
   }else{
-    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,status:romOrigem?'aprovado':'pendente',pgto,entradaPct,parcelas,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
+    const orc={id:genId(),num:orcs.length+1,cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,status:romOrigem?'aprovado':'pendente',pgto,entradaPct,entradaData,parcelas,parcelaIntervalo,parcelasPlano,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
     orcs.push(orc);DB.set(S.ORCAMENTOS,orcs);closeModal();toast(romOrigem?'Romaneio criado!':'Orçamento salvo!','ok')
   }
   render(romOrigem?'romaneio':'orcamentos')
@@ -1599,7 +1615,7 @@ function verOrc(id){
         <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
       </div>`
     })()}
-    ${(o.entradaPct||o.parcelas)?`<div style="margin-top:8px;font-size:12px;color:var(--txt2)"><strong>Condição de pagamento:</strong> ${condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)}</div>`:''}
+    ${(o.entradaPct||o.parcelas)?`<div style="margin-top:8px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:12px;color:var(--txt2)"><strong style="display:block;margin-bottom:4px;color:var(--txt)">Condição de pagamento</strong>${Array.isArray(o.parcelasPlano)?planoPagamentoLinhas({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData}:null,parcelas:o.parcelasPlano}).map(l=>`<div>${l}</div>`).join(''):condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)}</div>`:''}
     ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
@@ -1671,7 +1687,6 @@ function _contModal(titulo,c,orcc){
   const opcaoIdx=temOpcoes?(orcc.opcaoAprovada!=null&&orcc.opcoes[orcc.opcaoAprovada]?orcc.opcaoAprovada:0):0
   const opcaoSel=temOpcoes?orcc.opcoes[opcaoIdx]:null
   const totalF=c?c.totalF:(opcaoSel?opcaoSel.totalF:(orcc?orcc.totalF:0))
-  const entrada=c?c.entrada:(orcc?Math.round(totalF*(orcc.entradaPct||50)/100):0)
   const defObjeto=c?.cl_objeto||'A CONTRATADA se compromete a produzir e fornecer os produtos descritos neste contrato, nas quantidades e especificações acordadas, dentro do prazo estipulado.'
   const defCancelamento=c?.cl_cancelamento||'Em caso de cancelamento com menos de 15 (quinze) dias de antecedência, o valor do sinal não será devolvido. Cancelamentos com mais de 15 (quinze) dias de antecedência ensejam devolução de 50% do valor pago como entrada.'
   const defOutras=c?.cl_outras||'O presente contrato é celebrado em caráter irrevogável e irretratável, obrigando as partes e seus sucessores. O não pagamento na data acordada poderá implicar na suspensão do serviço. Fica eleito o foro da comarca de São Paulo para dirimir eventuais conflitos.'
@@ -1699,24 +1714,7 @@ function _contModal(titulo,c,orcc){
       <div class="fg"><label>Forma de Pagamento</label><select id="coPgto">${pgtoOpts(c?.pgto||orcc?.pgto||'')}</select></div>
       <div class="fg"><label>Valor Total (R$)</label><input type="number" id="coTotalF" value="${totalF}" step="0.01" oninput="contCalcRestante()"></div>
     </div>
-    <div style="margin:16px 0 6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--cara);border-bottom:2px solid var(--cream2);padding-bottom:6px">Dividir Pagamento (Entrada + Saldo)</div>
-    <div class="frow">
-      <div class="fg">
-        <label>Valor da Entrada / Sinal (R$)</label>
-        <input type="number" id="coEntrada" value="${entrada}" step="0.01" oninput="contCalcRestante()">
-        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-          <span onclick="contSetEntradaPct(50)" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">50%</span>
-          <span onclick="contSetEntradaPct(30)" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">30%</span>
-          <span onclick="contSetEntradaPct(100)" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:4px 9px;cursor:pointer">100% (à vista)</span>
-          <span onclick="contSetEntradaPct(0)" style="font-size:11px;color:#8A7E6E;background:var(--cream2);border:1px solid var(--cream2);border-radius:6px;padding:4px 9px;cursor:pointer">Sem entrada</span>
-        </div>
-      </div>
-      <div class="fg"><label>Pagar Entrada Até</label><input type="date" id="coEntradaData" value="${c?.entradaData||''}"></div>
-    </div>
-    <div class="frow">
-      <div class="fg"><label>Restante parcelado em</label><div style="display:flex;gap:8px;align-items:center"><input type="number" id="coParcelas" value="${c?.parcelas||orcc?.parcelas||1}" min="1" max="24" style="width:80px" oninput="contCalcRestante()"><span style="font-size:13px;color:var(--txt2)">vez(es)</span></div></div>
-      <div class="fg" style="align-self:flex-end"><div id="coRestanteBox" style="padding:10px;background:var(--cream2);border-radius:8px;font-size:13px;font-weight:700;text-align:center;color:var(--choc)">Restante: ${fmt(totalF-entrada)}</div></div>
-    </div>
+    ${condPagamentoFieldsHtml('co',c||(orcc?{entradaPct:orcc.entradaPct,entradaData:orcc.entradaData,parcelas:orcc.parcelas,parcelaIntervalo:orcc.parcelaIntervalo,parcelasPlano:orcc.parcelasPlano}:null))}
     <div class="frow">
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--cream2);border-radius:8px"><input type="checkbox" id="coEntradaPaga" ${c?.entradaPaga?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Entrada já foi paga</label>
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:8px 10px;background:var(--cream2);border-radius:8px"><input type="checkbox" id="coSaldoPago" ${c?.saldoPago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Saldo já foi pago</label>
@@ -1736,24 +1734,13 @@ function _contModal(titulo,c,orcc){
 
 function contCalcRestante(){
   const t=parseFloat(document.getElementById('coTotalF')?.value)||0
-  const e=parseFloat(document.getElementById('coEntrada')?.value)||0
-  const n=Math.max(1,parseInt(document.getElementById('coParcelas')?.value)||1)
-  const box=document.getElementById('coRestanteBox')
-  const restante=t-e
-  if(box)box.textContent=n>1?`Restante: ${fmt(restante)} · ${n}x de ${fmt(restante/n)}`:'Restante: '+fmt(restante)
-}
-function contSetEntradaPct(pct){
-  const t=parseFloat(document.getElementById('coTotalF')?.value)||0
-  const eEl=document.getElementById('coEntrada')
-  if(eEl)eEl.value=Math.round(t*pct/100*100)/100
-  contCalcRestante()
+  calcParcelasPreview('co',t)
 }
 function contOpcaoChange(){
   const sel=document.getElementById('coOpcao');if(!sel||!_contOrcc||!Array.isArray(_contOrcc.opcoes))return
   const op=_contOrcc.opcoes[Number(sel.value)];if(!op)return
-  const tEl=document.getElementById('coTotalF'),eEl=document.getElementById('coEntrada')
+  const tEl=document.getElementById('coTotalF')
   if(tEl)tEl.value=op.totalF
-  if(eEl)eEl.value=Math.round(op.totalF*0.5)
   contCalcRestante()
 }
 
@@ -1772,7 +1759,8 @@ function salvarCont(editId,orcId){
   const data=(document.getElementById('coData')||{}).value
   if(!cliId||!data){toast('Selecione cliente e data','err');return}
   const totalF=parseFloat(document.getElementById('coTotalF')?.value)||0
-  const entrada=parseFloat(document.getElementById('coEntrada')?.value)||0
+  const entradaPct=parseFloat((document.getElementById('coEntradaPct')||{}).value)||undefined
+  const entrada=entradaPct?Math.round(totalF*entradaPct/100*100)/100:0
   const orcc=orcId?DB.get(S.ORCAMENTOS).find(x=>x.id===orcId):null
   // Se o orçamento tem mais de uma opção de pacote, usa a que ficou selecionada no seletor (não sempre a Opção 1).
   const opcaoSel=document.getElementById('coOpcao')
@@ -1793,9 +1781,16 @@ function salvarCont(editId,orcId){
   const entradaData=(document.getElementById('coEntradaData')||{}).value||undefined
   const parcelasVal=Math.max(1,parseInt((document.getElementById('coParcelas')||{}).value)||1)
   const parcelas=parcelasVal>1?parcelasVal:undefined
+  const parcelaIntervalo=parseInt((document.getElementById('coIntervalo')||{}).value)||undefined
+  const parcela1Data=(document.getElementById('coParcela1Data')||{}).value||''
+  const planoCalc=calcPlanoPagamento(totalF,entradaPct||0,entradaData||'',parcelasVal,parcela1Data,parcelaIntervalo||30)
+  const parcelasPlano=(entradaPct||parcelas)?planoCalc.parcelas:undefined
   const entregaTxt=entrega==='entrega'?'entrega':(entrega==='combinar'?'entrega/retirada (a combinar entre as partes)':'retirada')
-  const restanteTxt=parcelas?`em ${parcelas} parcelas de ${fmt((totalF-entrada)/parcelas)} cada`:`no ato da ${entregaTxt}`
-  const cl2=cl2Custom||`O valor total do presente contrato é de ${fmt(totalF)}.${entrada>0?` O valor de ${fmt(entrada)} deverá ser pago a título de sinal/entrada${entradaData?' até o dia '+fmtDate(entradaData):''}. O saldo restante de ${fmt(totalF-entrada)} deverá ser quitado ${restanteTxt}.`:(parcelas?` O valor será pago ${restanteTxt}.`:'')}`
+  const temDatas=parcelas&&parcela1Data
+  const restanteTxt=temDatas
+    ?planoPagamentoLinhas({entrada:null,parcelas:planoCalc.parcelas}).join('; ')
+    :(parcelas?`em ${parcelas} parcelas de ${fmt((totalF-entrada)/parcelas)} cada`:`no ato da ${entregaTxt}`)
+  const cl2=cl2Custom||`O valor total do presente contrato é de ${fmt(totalF)}.${entrada>0?` O valor de ${fmt(entrada)} deverá ser pago a título de sinal/entrada${entradaData?' até o dia '+fmtDate(entradaData):''}. O saldo restante de ${fmt(totalF-entrada)} deverá ser quitado ${temDatas?'conforme cronograma a seguir: '+restanteTxt:restanteTxt}.`:(parcelas?` O valor será pago ${temDatas?'conforme cronograma a seguir: '+restanteTxt:restanteTxt}.`:'')}`
   const cl3=cl3Custom||(dataEntrega?`A ${entregaTxt} está prevista para o dia ${fmtDate(dataEntrega)}${horaEntrega?' às '+horaEntrega:''}.${endEntrega?' Endereço: '+endEntrega:''}`:'')||'A data de entrega/retirada será confirmada conforme acordado entre as partes.'
   const novoCampos={
     cliId,data,
@@ -1803,7 +1798,7 @@ function salvarCont(editId,orcId){
     dataEvento,dataEntrega,horaEntrega,entrega,
     endEntrega:endEntrega||undefined,
     pgto:pgto||undefined,
-    itens,totalF,entrada,parcelas,
+    itens,totalF,entrada,entradaPct,parcelas,parcelaIntervalo,parcelasPlano,
     entradaPaga:!!(document.getElementById('coEntradaPaga')||{}).checked,
     saldoPago:!!(document.getElementById('coSaldoPago')||{}).checked,
     opcaoNome:opcaoEscolhida?opcaoEscolhida.nome:existing.opcaoNome,
@@ -1885,7 +1880,7 @@ function imprimirCont(id){
     prodBlock=`<div style="margin:14px 0;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:13px">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Valor do Contrato</div>
       <div style="font-size:20px;font-weight:700;color:#3D3028">${fmt(c.totalF)}</div>
-      ${c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; Saldo: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:''}
+      ${c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; ${c.parcelas>1?`Saldo em ${c.parcelas}x`:'Saldo'}: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:''}
     </div>`
   }
   const clausulas=[
@@ -5934,12 +5929,15 @@ function imprimirOrc(id){
           if(o.dataEntrega)r.push(cell('Data da Entrega',fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:'')))
           if(o.entrega)r.push(cell('Modalidade',modalidadeLabel(o.entrega)))
           if(o.pgto)r.push(cell('Forma de Pagamento',o.pgto))
-          if(o.entradaPct||o.parcelas)r.push(cell('Condição de Pagamento',condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)))
           if(o.endEntrega)r.push(cell('Endereço de Entrega',o.endEntrega))
           return r.join('')
         })()}
       </div>
     </div>
+    ${(o.entradaPct||o.parcelas)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
+      <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
+      ${(Array.isArray(o.parcelasPlano)?planoPagamentoLinhas({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData}:null,parcelas:o.parcelasPlano}):[condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+    </div>`:''}
     ${cliBlock(cli)}
     ${prodBlockHtml}`
     +docFoot(o.obs,true))
@@ -6064,7 +6062,9 @@ async function gerarLinkOrc(id){
   if(o.entrega)p.md=o.entrega
   if(o.pgto)p.pg=o.pgto
   if(o.entradaPct)p.ep=o.entradaPct
+  if(o.entradaData)p.ed=o.entradaData
   if(o.parcelas)p.pc=o.parcelas
+  if(Array.isArray(o.parcelasPlano))p.pp=o.parcelasPlano
   if(o.endEntrega)p.xe=o.endEntrega
   const _prods=DB.get(S.PRODUTOS)
   const _gc=pId=>{if(!pId||pId==='_custom')return'Personalizado';const _p=_prods.find(x=>x.id===pId);return _p&&_p.cat?_p.cat:'Outros'}
@@ -6208,17 +6208,17 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas
+  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano
   if(raw.o){
     const {o,cli,e}=raw
     nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
-    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1
+    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
     nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
-    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1
+    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp
     itens=(raw.it||[]).map(x=>{
       if(!Array.isArray(x))return{n:x.n,q:x.q,pu:x.pu||0,s:x.s,c:x.c||'Outros',foto:x.f||'',obs:x.o||''}
       return x.length>=5?{n:x[0],q:x[1],pu:x[2],s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''}:{n:x[0],q:x[1],pu:0,s:x[2],c:x[3]||'Outros'}
@@ -6256,8 +6256,11 @@ function showClientView(raw,docId){
   if(dd)_infoCells.push(_infoCell('Data da Entrega',fmtDate(dd)+(hd?' às '+hd:'')))
   if(md)_infoCells.push(_infoCell('Modalidade',modalidadeLabel(md)))
   if(pg)_infoCells.push(_infoCell('Forma de Pagamento',pg))
-  if(entradaPct||parcelas>1)_infoCells.push(_infoCell('Condição de Pagamento',condPagamentoTxt(totalF,entradaPct,parcelas)))
   if(xe)_infoCells.push(_infoCell('Endereço de Entrega',xe))
+  const _planoPagHtml=(entradaPct||parcelas>1)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
+    <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
+    ${(Array.isArray(parcelasPlano)?planoPagamentoLinhas({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+  </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
   const _logoHtml=_logoEl?`<img src="${_logoEl.src}" style="max-height:80px;max-width:96px;object-fit:contain;display:block" alt="">`:'';
@@ -6324,7 +6327,7 @@ function showClientView(raw,docId){
       <div style="margin-bottom:16px;border:1px solid #DDD5C8;border-radius:6px;overflow:hidden">
         <div style="display:flex;flex-wrap:wrap">${_infoCells.join('')}</div>
       </div>
-
+      ${_planoPagHtml}
       <div style="margin-bottom:16px">
         <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Cliente</div>
         <table class="cv-cli-table">
@@ -6504,7 +6507,7 @@ async function gerarLinkCont(id){
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
-    tf:c.totalF||0,en:c.entrada||0,ed:c.entradaData||'',pc:c.parcelas||1,
+    tf:c.totalF||0,en:c.entrada||0,ed:c.entradaData||'',pc:c.parcelas||1,pp:Array.isArray(c.parcelasPlano)?c.parcelasPlano:undefined,
     pd:!!c.entradaPaga,sd:!!c.saldoPago,oid:c.orcId||(orcFb?orcFb.id:''),
     it:itens,
     c1:c.cl_objeto||'',c2:c.cl_pagamento||'',c3:c.cl_entrega||'',c4:c.cl_cancelamento||'',c5:c.cl_outras||'',
