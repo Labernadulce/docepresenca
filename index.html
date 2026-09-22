@@ -2435,6 +2435,24 @@ function novaCompra(){
   renderCItens(ings);calcCmpTotals()
 }
 
+function handleCmpItemFoto(i,input){
+  const it=tempItems[i]
+  if(!it||!it.pId||it.pId==='_free'||it.pId==='__novo__'){toast('Selecione um ingrediente do estoque primeiro.','err');input.value='';return}
+  const file=input.files[0];if(!file)return
+  if(file.size>2*1024*1024){toast('Arquivo muito grande (máx. 2 MB)','err');input.value='';return}
+  const reader=new FileReader()
+  reader.onload=e=>{
+    const prods=DB.get(S.PRODUTOS)
+    const idx=prods.findIndex(x=>x.id===it.pId)
+    if(idx>=0){
+      prods[idx].foto={name:file.name,type:file.type,data:e.target.result}
+      DB.set(S.PRODUTOS,prods)
+      toast('Foto do produto salva no Estoque!','ok')
+      renderCItens()
+    }
+  }
+  reader.readAsDataURL(file)
+}
 function renderCItens(ings){
   const el=document.getElementById('cItens');if(!el)return
   if(!ings)ings=DB.get(S.PRODUTOS).filter(p=>p.tipo==='ingrediente'&&p.ativo)
@@ -2450,9 +2468,11 @@ function renderCItens(ings){
     </div>`:`<div id="cPrev_${i}" style="padding:4px 12px 5px;background:var(--cream);border-top:1px solid var(--cream2)">
       <span style="font-size:11px;color:var(--txt3);font-style:italic">Preencha a quantidade, unidade e valor para ver o cálculo do custo</span>
     </div>`
+    const _prodVinc=(it.pId&&it.pId!=='_free'&&it.pId!=='__novo__')?ings.find(x=>x.id===it.pId):null
+    const _temFotoVinc=_prodVinc&&_prodVinc.foto&&_prodVinc.foto.data
     return`
     <div style="border:1.5px solid var(--cream2);border-radius:8px;overflow:hidden;margin-bottom:8px;background:var(--white)">
-      <div style="display:grid;grid-template-columns:2.2fr 62px 56px 100px 26px 26px;gap:6px;padding:8px 10px;align-items:center">
+      <div style="display:grid;grid-template-columns:2.2fr 62px 56px 100px 26px 26px 26px;gap:6px;padding:8px 10px;align-items:center">
         ${it._novoMode
           ?`<span style="font-size:12px;color:var(--cara);font-weight:600">Novo ingrediente ↓</span>`
           :`<select onchange="selectIngCmp(${i},this.value)" style="${iStl}">
@@ -2473,6 +2493,8 @@ function renderCItens(ings){
           oninput="updateCmpItem(${i},'valor',this.value)"
           onblur="if(!tempItems[${i}]._embMode)renderCItens()"
           style="${iStl};text-align:right">
+        <input type="file" id="cFotoInput_${i}" accept="image/*" style="display:none" onchange="handleCmpItemFoto(${i},this)">
+        <button class="btn-ic" onclick="${_prodVinc?`document.getElementById('cFotoInput_${i}').click()`:`toast('Selecione um ingrediente do estoque pra anexar a foto dele.','err')`}" title="${_temFotoVinc?'Trocar foto do produto':'Adicionar foto do produto'}" style="padding:4px;color:${_temFotoVinc?'var(--ok)':'var(--txt3)'}">📷</button>
         <button class="btn-ic" onclick="tempItems[${i}]._embMode=!tempItems[${i}]._embMode;renderCItens()" title="Calcular por embalagens (N × Peso)" style="padding:4px;color:${it._embMode?'var(--cara)':'var(--txt3)'}">📦</button>
         <button class="btn-ic btn-d" onclick="removeCmpItem(${i})" style="padding:4px"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
       </div>
