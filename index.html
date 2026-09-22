@@ -2014,8 +2014,14 @@ function calcProdCusto(){
   const leg=fmtCustoLeg(custo,destUn)
   const ex200=custo*(destUn==='g'||destUn==='ml'?200:0.2)
   const exLbl=destUn==='g'||destUn==='ml'?`200${destUn}`:`0,2${destUn}`
-  prev.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ ${leg}</span> <span style="color:var(--txt3);font-size:11px">(total: ${numUn}x = ${fmt(valTotal)} por ${qtdBaseTotal}${destUn} — usar ${exLbl} na receita = R$${ex200>=1?ex200.toFixed(2):ex200.toFixed(4)})</span>`
+  prev.innerHTML=`<span style="color:var(--ok);font-weight:700">✓ ${leg}</span> <span style="color:var(--txt3);font-size:11px">(total: ${numUn}x = ${fmt(valTotal)} por ${qtdBaseTotal}${destUn} — usar ${exLbl} na receita = R$${ex200>=1?ex200.toFixed(2):ex200.toFixed(4)})</span>
+    <button type="button" onclick="usarTotalComoEstoque(${qtdBaseTotal})" style="display:block;margin-top:5px;font-size:10.5px;color:var(--cara);background:none;border:none;text-decoration:underline;cursor:pointer;padding:0">↳ Usar esse total (${qtdBaseTotal}${destUn}) como Estoque Atual</button>`
   if(custoHid)custoHid.value=custo
+}
+function usarTotalComoEstoque(qtdBaseTotal){
+  const el=document.getElementById('pEst')
+  if(el)el.value=qtdBaseTotal
+  toast('Estoque atual atualizado!','ok')
 }
 function salvarProd(){
   const nome=(document.getElementById('pNome')||{}).value||''
