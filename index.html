@@ -5990,7 +5990,9 @@ async function gerarLinkOrc(id){
       const pFs=JSON.parse(JSON.stringify(p))
       if(Array.isArray(pFs.it))pFs.it=pFs.it.map(_itemObj)
       if(Array.isArray(pFs.op))pFs.op=pFs.op.map(op=>({...op,it:(op.it||[]).map(_itemObj)}))
-      await _orgCol('contratos_pub').doc(o.id).set(pFs)
+      // merge:true é essencial aqui - sem isso, gerar o link de novo (reenviar) sobrescrevia o documento
+      // inteiro e apagava a aprovação/assinatura que o cliente já tinha registrado nele.
+      await _orgCol('contratos_pub').doc(o.id).set(pFs,{merge:true})
       firestoreId=o.id
     }catch(err){console.warn('contratos_pub write (orcamento):',err)}
   }
