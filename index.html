@@ -13,6 +13,16 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+// ── Multi-empresa: identifica o tenant pela URL (?empresa=slug) antes de qualquer leitura de dados ──
+// Sem ?empresa= na URL, assume a empresa original (Laberna Dulce), pra links antigos continuarem funcionando.
+(function(){
+  var params = new URLSearchParams(location.search);
+  var raw = (params.get('empresa')||'').trim().toLowerCase();
+  var slug = raw.replace(/[^a-z0-9-]+/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'');
+  window.__TENANT_SLUG__ = slug || 'laberna-dulce';
+})();
+</script>
 <style>
 :root{--choc:#1C1A18;--choc2:#2A2724;--choc3:#3A3632;--cara:#B8912A;--cara2:#D4AD50;--cream:#F8F7F4;--cream2:#EDEBE6;--ivory:#FDFCFA;--txt:#1C1A18;--txt2:#52493E;--txt3:#8A7E6E;--white:#FFFFFF;--ok:#3D8A5E;--warn:#C4724A;--bad:#B84040;--sw:260px;--hh:64px;--r:12px;--sh:0 2px 16px rgba(28,26,24,.09);--shm:0 4px 28px rgba(28,26,24,.16)}
 #loginOv{position:fixed;inset:0;background:url('bg-login.jpg') center/cover no-repeat;z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
@@ -398,7 +408,9 @@ const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc
 const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção'}
 
 // ===== DB =====
-const DB={get:k=>JSON.parse(localStorage.getItem(k)||'[]'),set:(k,v)=>localStorage.setItem(k,JSON.stringify(v)),clear:k=>localStorage.removeItem(k)}
+// Cada empresa (tenant) tem suas proprias chaves de localStorage, prefixadas pelo slug da URL (?empresa=)
+function _lsKey(k){ return (window.__TENANT_SLUG__||'laberna-dulce')+'__'+k }
+const DB={get:k=>JSON.parse(localStorage.getItem(_lsKey(k))||'[]'),set:(k,v)=>localStorage.setItem(_lsKey(k),JSON.stringify(v)),clear:k=>localStorage.removeItem(_lsKey(k))}
 
 // ===== STATE =====
 let page='dashboard', tempItems=[], editId=null, tempAnexo=null, estoqueTab='produto', finTab='todos', romOrigem=false
@@ -524,7 +536,9 @@ function verNotaCompra(id){const c=DB.get(S.COMPRAS).find(x=>x.id===id);if(c&&c.
 
 // ===== SAMPLE DATA =====
 function initSample(){
-  if(localStorage.getItem('ds_init'))return
+  // Dados de exemplo só fazem sentido pra empresa original - empresas novas (Painel Master) começam vazias
+  if(window.__TENANT_SLUG__!=='laberna-dulce')return
+  if(localStorage.getItem(_lsKey('ds_init')))return
   const clientes=[
     {id:'c1',nome:'Ana Paula Ferreira',fone:'(11) 99234-5678',email:'ana@email.com',end:'Rua das Flores, 123',cidade:'São Paulo',obs:'Prefere produtos sem glúten',dt:'2025-01-10'},
     {id:'c2',nome:'Carlos Eduardo Silva',fone:'(11) 97654-3210',email:'carlos@email.com',end:'Av. Brasil, 456',cidade:'São Paulo',obs:'',dt:'2025-02-15'},
@@ -577,7 +591,7 @@ function initSample(){
   ]
   DB.set(S.CLIENTES,clientes);DB.set(S.PRODUTOS,produtos);DB.set(S.VENDAS,vendas)
   DB.set(S.ORCAMENTOS,orcamentos);DB.set(S.COMPRAS,compras);DB.set(S.TRANS,trans)
-  localStorage.setItem('ds_init','1')
+  localStorage.setItem(_lsKey('ds_init'),'1')
 }
 
 // ===== ROUTER =====
@@ -1107,14 +1121,19 @@ async function verificarAprovacoesOrc(){
   if(!_fdb){toast('Firebase indisponível no momento.','err');return}
   toast('Verificando aprovações...','ok')
   try{
-    const snap=await _fdb.collection('contratos_pub').where('aprovado','==',true).get()
+    // .where() roda na colecao crua (todas as empresas) - filtra por prefixo da empresa atual no cliente,
+    // ja que uma query composta (tenant + aprovado) precisaria de indice novo que nao da pra criar por aqui.
+    const _pfx=window.__TENANT_SLUG__+'__'
+    const snap=await _orgCol('contratos_pub').where('aprovado','==',true).get()
     const orcs=DB.get(S.ORCAMENTOS)
     const pendentes=[]
     snap.forEach(doc=>{
+      if(!doc.id.startsWith(_pfx))return
+      const localId=doc.id.slice(_pfx.length)
       const d=doc.data()
       if(d.tp!=='orc')return
-      const local=orcs.find(o=>o.id===doc.id)
-      if(local&&local.status!=='aprovado')pendentes.push({id:doc.id,local,d})
+      const local=orcs.find(o=>o.id===localId)
+      if(local&&local.status!=='aprovado')pendentes.push({id:localId,local,d})
     })
     if(!pendentes.length){toast('Nenhuma aprovação nova no momento.','ok');return}
     openModal('🔔 Aprovações Recebidas',`
@@ -1131,7 +1150,7 @@ async function verificarAprovacoesOrc(){
 }
 function aplicarAprovacaoOrc(id){
   statusOrc(id,'aprovado')
-  if(_fdb)_fdb.collection('contratos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
+  if(_fdb)_orgCol('contratos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
 }
 function novoOrc(fromRomaneio){
   romOrigem=!!fromRomaneio
@@ -2888,7 +2907,7 @@ function toast(msg,type=''){
 }
 
 // ===== EMPRESA =====
-function getEmpresa(){return JSON.parse(localStorage.getItem(S.EMPRESA)||'{}')}
+function getEmpresa(){const e=DB.get(S.EMPRESA);return(e&&!Array.isArray(e))?e:{}}
 function empresaHTML(){
   const e=getEmpresa()
   return`
@@ -3131,15 +3150,15 @@ const REC_CATS=['Bolos','Tortas','Doces & Bombons','Brigadeiros','Salgados','Bis
 const REC_UNIDS=['g','kg','ml','L','xícara','colher de sopa','colher de chá','unidade','fatia','pitada','a gosto']
 const REC_DIFS=['Fácil','Médio','Difícil']
 function getRecCats(){
-  const custom=JSON.parse(localStorage.getItem('ds_rec_cats')||'[]')
+  const custom=JSON.parse(localStorage.getItem(_lsKey('ds_rec_cats'))||'[]')
   return [...REC_CATS,...custom]
 }
 function saveNewCat(nome){
   nome=(nome||'').trim();if(!nome)return null
   const all=getRecCats()
   if(all.map(x=>x.toLowerCase()).includes(nome.toLowerCase()))return nome
-  const custom=JSON.parse(localStorage.getItem('ds_rec_cats')||'[]')
-  custom.push(nome);localStorage.setItem('ds_rec_cats',JSON.stringify(custom))
+  const custom=JSON.parse(localStorage.getItem(_lsKey('ds_rec_cats'))||'[]')
+  custom.push(nome);localStorage.setItem(_lsKey('ds_rec_cats'),JSON.stringify(custom))
   return nome
 }
 function handleRecCat(sel){
@@ -4855,7 +4874,7 @@ async function verRomaneioItens(id){
   if(_fdb){
     try{
       const{allRet,ciPfx,cancelId}=await _collectRomAllRet(id)
-      const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+      const cancelSnap=await _orgCol('assinaturas').doc(cancelId).get()
       const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
       const cancelledIdxs=await _getRomCancelados(id,allRet.length,ciPfx)
       const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
@@ -5048,7 +5067,7 @@ async function gerarLinkRomaneio(orcId){
       const romLinkId=genId()
       const cleanPayload=JSON.parse(JSON.stringify(payload))
       cleanPayload._type='romview'
-      await _fdb.collection('assinaturas').doc('rv'+romLinkId).set(cleanPayload)
+      await _orgCol('assinaturas').doc('rv'+romLinkId).set(cleanPayload)
       finalUrl=base+'#romaneioview=rv'+romLinkId
     }catch(err){console.warn('romaneio link write:',err)}
   }
@@ -5085,7 +5104,7 @@ async function verRetiradasRom(orcId){
   try{
     const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
     if(!allRet.length)return toast('Nenhuma retirada registrada para este romaneio','warn')
-    const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+    const cancelSnap=await _orgCol('assinaturas').doc(cancelId).get()
     const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
     const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
     const retiradas=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
@@ -5122,7 +5141,7 @@ async function anularRetiradasRom(orcId){
     try{
       const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
       if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1,ciPfx)))
-      try{const ref=_fdb.collection('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
+      try{const ref=_orgCol('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
       const orcs=DB.get(S.ORCAMENTOS)||[]
       const idx=orcs.findIndex(o=>o.id===orcId)
       if(idx>=0){delete orcs[idx].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
@@ -5175,7 +5194,7 @@ async function excluirRomaneio(orcId){
     try{
       const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
       if(allRet.length)await Promise.all(Array.from({length:allRet.length},(_,i)=>_addRomCancelado(orcId,i+1,ciPfx)))
-      try{const ref=_fdb.collection('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
+      try{const ref=_orgCol('assinaturas').doc(cancelId);const snap=await ref.get();if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,data:new Date().toISOString(),dataFmt:new Date().toLocaleString('pt-BR')})}catch(e){}
       const orcs=DB.get(S.ORCAMENTOS)||[]
       const idx=orcs.findIndex(o=>o.id===orcId)
       if(idx>=0){delete orcs[idx].romAssinatura;DB.set(S.ORCAMENTOS,orcs)}
@@ -5193,12 +5212,12 @@ async function limparHistoricoRom(orcId){
       const nextV=(base.cleanVersion||0)+1
       const newBaseId=nextV===1?'romclean'+orcId:'romck'+nextV+orcId
       const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
-      const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+      const cancelSnap=await _orgCol('assinaturas').doc(cancelId).get()
       const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
       const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
       const validRet=allRet.filter((r,i)=>!cancelledIdxs.has(i+1)&&(!cancelTime||!!(r.data&&r.data>cancelTime)))
       // Cria checkpoint mesmo se vazio — limpa visualmente os registros anulados
-      await _fdb.collection('assinaturas').doc(newBaseId).set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
+      await _orgCol('assinaturas').doc(newBaseId).set({retiradas:validRet,_cleanedAt:new Date().toISOString(),_orcId:orcId})
       if(validRet.length){
         toast(`✅ Histórico limpo! ${validRet.length} retirada${validRet.length!==1?'s':''} preservada${validRet.length!==1?'s':''}.`,'ok')
         editarDocAssinado(orcId)
@@ -5218,14 +5237,14 @@ async function _getRomCancelados(orcId,max,ciPfx){
   if(!_fdb||!max)return new Set()
   const pfx=ciPfx||('romci'+orcId+'_')
   try{
-    const snaps=await Promise.all(Array.from({length:max},(_,i)=>_fdb.collection('assinaturas').doc(pfx+(i+1)).get().catch(()=>({exists:false}))))
+    const snaps=await Promise.all(Array.from({length:max},(_,i)=>_orgCol('assinaturas').doc(pfx+(i+1)).get().catch(()=>({exists:false}))))
     return new Set(snaps.map((s,i)=>s.exists&&!s.data()._cleared?i+1:null).filter(x=>x!==null))
   }catch(e){return new Set()}
 }
 async function _addRomCancelado(orcId,idx,ciPfx){
   if(!_fdb)throw new Error('Firebase indisponível')
   const pfx=ciPfx||('romci'+orcId+'_')
-  const ref=_fdb.collection('assinaturas').doc(pfx+idx)
+  const ref=_orgCol('assinaturas').doc(pfx+idx)
   const snap=await ref.get()
   if(!snap.exists)await ref.set({_cancelado:true,_orcId:orcId,_idx:idx,data:new Date().toISOString()})
 }
@@ -5234,10 +5253,10 @@ async function _getRomBase(orcId){
   try{
     // Verifica versões de limpeza do maior para o menor (suporta até v5)
     for(let v=5;v>=2;v--){
-      const s=await _fdb.collection('assinaturas').doc('romck'+v+orcId).get()
+      const s=await _orgCol('assinaturas').doc('romck'+v+orcId).get()
       if(s.exists)return{baseId:'romck'+v+orcId,ciPfx:'romcick'+v+orcId+'_',cancelId:'romcancelck'+v+orcId,isClean:true,cleanRet:s.data().retiradas||[],cleanVersion:v}
     }
-    const s=await _fdb.collection('assinaturas').doc('romclean'+orcId).get()
+    const s=await _orgCol('assinaturas').doc('romclean'+orcId).get()
     if(s.exists)return{baseId:'romclean'+orcId,ciPfx:'romcicl'+orcId+'_',cancelId:'romcancelcl'+orcId,isClean:true,cleanRet:s.data().retiradas||[],cleanVersion:1}
   }catch(e){}
   return{baseId:'rom'+orcId,ciPfx:'romci'+orcId+'_',cancelId:'romcancel'+orcId,isClean:false,cleanRet:null,cleanVersion:0}
@@ -5248,12 +5267,12 @@ async function _collectRomAllRet(orcId){
   const allRet=isClean?[...cleanRet]:[]
   try{
     if(!isClean){
-      const firstSnap=await _fdb.collection('assinaturas').doc(baseId).get()
+      const firstSnap=await _orgCol('assinaturas').doc(baseId).get()
       if(firstSnap.exists){const fd=firstSnap.data();if(fd.retiradas)allRet.push(...fd.retiradas);else if(fd.retirada)allRet.push(fd.retirada)}
     }
     let seq=2
     while(seq<100){
-      const seqSnap=await _fdb.collection('assinaturas').doc(baseId+seq).get()
+      const seqSnap=await _orgCol('assinaturas').doc(baseId+seq).get()
       if(!seqSnap.exists||seqSnap.data()._purged)break
       const sd=seqSnap.data()
       if(sd.retirada)allRet.push(sd.retirada);else if(sd.retiradas)allRet.push(...sd.retiradas)
@@ -5424,7 +5443,7 @@ function showRomaneioClientView(raw){
       if(!_fdb){if(_btn){_btn.disabled=false;_btn.textContent='✅ Confirmar Recebimento'}return}
       try{
         const{allRet,ciPfx,cancelId}=await _collectRomAllRet(orcId)
-        const cancelSnap=await _fdb.collection('assinaturas').doc(cancelId).get()
+        const cancelSnap=await _orgCol('assinaturas').doc(cancelId).get()
         const cancelTime=cancelSnap.exists&&!cancelSnap.data()._cleared?cancelSnap.data().data:null
         // Filtra usando posições absolutas (índice em allRet), evitando desalinhamento
         const cancelledIdxs=await _getRomCancelados(orcId,allRet.length,ciPfx)
@@ -5530,14 +5549,14 @@ async function confirmarRomaneioRecebimento(){
       const{baseId,isClean}=await _getRomBase(orcId)
       if(!isClean){
         // Namespace original: primeiro doc guarda array, subsequentes são individuais
-        const firstRef=_fdb.collection('assinaturas').doc(baseId)
+        const firstRef=_orgCol('assinaturas').doc(baseId)
         const firstSnap=await firstRef.get()
         if(!firstSnap.exists){
           await firstRef.set({retiradas:[novaRetirada],num,nome:nomeInp,data:isoNow,dataFmt:agora})
         }else{
           let seq=2;let _written=false
           while(seq<100){
-            const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
+            const nextRef=_orgCol('assinaturas').doc(baseId+seq)
             const nextSnap=await nextRef.get()
             if(!nextSnap.exists||nextSnap.data()._purged){
               await nextRef.set({retirada:novaRetirada,num,nome:nomeInp,data:isoNow,dataFmt:agora,_orcId:orcId,_seq:seq})
@@ -5551,7 +5570,7 @@ async function confirmarRomaneioRecebimento(){
         // Namespace limpo (após limpeza): romclean{orcId} já existe, salvar em romclean{orcId}2, 3…
         let seq=2;let _written=false
         while(seq<100){
-          const nextRef=_fdb.collection('assinaturas').doc(baseId+seq)
+          const nextRef=_orgCol('assinaturas').doc(baseId+seq)
           const nextSnap=await nextRef.get()
           if(!nextSnap.exists||nextSnap.data()._purged){
             await nextRef.set({retirada:novaRetirada,num,nome:nomeInp,data:isoNow,dataFmt:agora,_orcId:orcId,_seq:seq})
@@ -5821,12 +5840,13 @@ async function gerarLinkOrc(id){
       const pFs=JSON.parse(JSON.stringify(p))
       if(Array.isArray(pFs.it))pFs.it=pFs.it.map(_itemObj)
       if(Array.isArray(pFs.op))pFs.op=pFs.op.map(op=>({...op,it:(op.it||[]).map(_itemObj)}))
-      await _fdb.collection('contratos_pub').doc(o.id).set(pFs)
+      await _orgCol('contratos_pub').doc(o.id).set(pFs)
       firestoreId=o.id
     }catch(err){console.warn('contratos_pub write (orcamento):',err)}
   }
+  const _linkBase=location.href.split('#')[0] // preserva ?empresa=slug pra identificar o tenant no link publico
   if(firestoreId){
-    longUrl=`${location.origin}${location.pathname}#orcview=${firestoreId}`
+    longUrl=`${_linkBase}#orcview=${firestoreId}`
   }else{
     // Firestore indisponivel: remove só as fotos do payload (ficariam grandes demais), mantém o resto (obs etc.), e usa o metodo compactado na propria URL
     const pSemFoto=JSON.parse(JSON.stringify(p))
@@ -5835,7 +5855,7 @@ async function gerarLinkOrc(id){
     const json=JSON.stringify(pSemFoto)
     const compressed=await _b64compress(json)
     const encoded=compressed?'z.'+compressed:btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'')
-    longUrl=`${location.origin}${location.pathname}#orcview=${encoded}`
+    longUrl=`${_linkBase}#orcview=${encoded}`
   }
   const wa=e.wa?e.wa.replace(/\D/g,''):''
   const _waBtn=u=>`<div style="margin-top:12px"><a href="https://wa.me/${wa}?text=${encodeURIComponent('Olá! Segue o link do seu orçamento: '+u)}" target="_blank" class="btn btn-ok" style="width:100%;justify-content:center;text-decoration:none;display:flex">Enviar via WhatsApp</a></div>`
@@ -5883,8 +5903,8 @@ async function checkClientView(){
         while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
         if(!_fdb)throw new Error('Firebase indisponível')
         // tenta assinaturas (novo) e contratos_pub (legado) para compatibilidade
-        let snap=await _fdb.collection('assinaturas').doc(val).get()
-        if(!snap.exists)snap=await _fdb.collection('contratos_pub').doc(val).get()
+        let snap=await _orgCol('assinaturas').doc(val).get()
+        if(!snap.exists)snap=await _orgCol('contratos_pub').doc(val).get()
         if(!snap.exists)throw new Error('Romaneio não encontrado')
         data=snap.data()
       }
@@ -5904,7 +5924,7 @@ async function checkClientView(){
         let retries=0
         while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
         if(!_fdb)throw new Error('Firebase indisponível')
-        const snap=await _fdb.collection('contratos_pub').doc(val).get()
+        const snap=await _orgCol('contratos_pub').doc(val).get()
         if(!snap.exists)throw new Error('Contrato não encontrado')
         data=snap.data()
       }
@@ -5924,7 +5944,7 @@ async function checkClientView(){
       let retries=0
       while(!_fbAuthReady&&retries<30){await new Promise(r=>setTimeout(r,300));retries++}
       if(!_fdb)throw new Error('Firebase indisponível')
-      const snap=await _fdb.collection('contratos_pub').doc(val).get()
+      const snap=await _orgCol('contratos_pub').doc(val).get()
       if(!snap.exists)throw new Error('Orçamento não encontrado')
       data=snap.data();docId=val
     }else{
@@ -6191,7 +6211,7 @@ function showClientView(raw,docId){
         const opcaoEscolhida=_opcoes?(sel?Number(sel.value):0):null
         const opcaoNome=_opcoes?_opcoes[opcaoEscolhida].nome:null
         const assinaturaImg=_signCanvas?_signCanvas.toDataURL('image/png'):null
-        await _fdb.collection('contratos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome,assinaturaImg},{merge:true})
+        await _orgCol('contratos_pub').doc(docId).set({aprovado:true,aprovadoPor:nomeAssin,aprovadoEm:new Date().toISOString(),opcaoEscolhida,opcaoNome,assinaturaImg},{merge:true})
         const _box=document.getElementById('cvApprovalBox')
         if(_box)_box.innerHTML=`<div style="text-align:center;padding:8px 0">
           <div style="font-size:34px;margin-bottom:8px">✅</div>
@@ -6234,7 +6254,7 @@ async function gerarLinkCont(id){
   if(_fdb){
     try{
       const cleanPayload=JSON.parse(JSON.stringify(payload))
-      await _fdb.collection('contratos_pub').doc(id).set(cleanPayload)
+      await _orgCol('contratos_pub').doc(id).set(cleanPayload)
       finalUrl=base+'#contview='+id
     }catch(e){console.warn('contratos_pub write:',e)}
   }
@@ -6404,7 +6424,7 @@ function showContView(d){
       let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
       if(!_fdb)return
       try{
-        const snap=await _fdb.collection('assinaturas').doc(_contId).get()
+        const snap=await _orgCol('assinaturas').doc(_contId).get()
         if(!snap.exists)return
         const sig=snap.data()
         const sec=document.getElementById('cvsignSection')
@@ -6472,7 +6492,7 @@ async function _cvContSignar(wa,num,total,empresa){
   const contId=location.hash.startsWith('#contview=')?location.hash.slice(10):''
   if(contId&&!contId.startsWith('z.')){
     let t=0;while(!_fdb&&t<30){await new Promise(r=>setTimeout(r,300));t++}
-    if(_fdb)try{await _fdb.collection('assinaturas').doc(contId).set({nome,data:isoNow,dataFmt:agora,num:numFmt,ip,device,browser})}catch(e){console.warn('sig write:',e)}
+    if(_fdb)try{await _orgCol('assinaturas').doc(contId).set({nome,data:isoNow,dataFmt:agora,num:numFmt,ip,device,browser})}catch(e){console.warn('sig write:',e)}
   }
   // PDF comprovante
   setTimeout(()=>_cvGerarComprovante(nome,agora,numFmt,total,ip,device,browser),800)
@@ -6815,6 +6835,7 @@ function applyMenuVisibility(){
   if(btn)btn.style.display=isMob?'flex':'none'
 }
 function init(){
+  if(window.__TENANT_SLUG__==='admin'){ initMasterAdmin(); return }
   initSample()
   const now=new Date()
   document.getElementById('hdrDate').textContent=now.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
@@ -6839,6 +6860,21 @@ const _FB_CFG={
 }
 const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos']
 let _fdb=null,_fbReady=false,_fbAuthReady=false
+// Isolamento por empresa: as regras de seguranca do projeto so liberam as colecoes ja existentes
+// (store, contratos_pub, assinaturas, fotos) - uma colecao nova tipo 'orgs' e rejeitada (testado e confirmado).
+// Por isso o isolamento e feito prefixando o ID de cada documento com o slug da empresa (ex: 'laberna-dulce__ds_prod'),
+// mantendo as MESMAS colecoes de sempre. _orgCol(nome) devolve um objeto com a mesma cara de uma CollectionReference
+// (.doc/.where/.onSnapshot) mas com .doc(id) aplicando o prefixo automaticamente.
+function _orgCol(name){
+  const raw=_fdb.collection(name)
+  const tenant=window.__TENANT_SLUG__
+  return {
+    doc:id=>raw.doc(tenant+'__'+id),
+    where:(...args)=>raw.where(...args),
+    get:()=>raw.get(),
+    onSnapshot:cb=>raw.onSnapshot(cb)
+  }
+}
 
 function _fbPanel(icon,msg,cor){
   const el=document.getElementById('puterPanel');if(!el)return
@@ -6853,17 +6889,18 @@ async function _fbInit(){
     _fbPanel('↻','Conectando...','var(--cara2)')
     await firebase.auth().signInAnonymously()
     _fbAuthReady=true
+    _loadTenantAuthConfig()
     _fbPanel('↻','Carregando dados...','var(--cara2)')
-    const col=_fdb.collection('store')
+    const col=_orgCol('store')
     let updated=0
     for(const key of _FB_KEYS){
       try{
         const snap=await col.doc(key).get()
         if(snap.exists){
           const remoteJson=JSON.stringify(snap.data().v)
-          if(remoteJson!==localStorage.getItem(key)){localStorage.setItem(key,remoteJson);updated++}
+          if(remoteJson!==localStorage.getItem(_lsKey(key))){localStorage.setItem(_lsKey(key),remoteJson);updated++}
         }else{
-          const local=localStorage.getItem(key)
+          const local=localStorage.getItem(_lsKey(key))
           if(local){try{await col.doc(key).set({v:JSON.parse(local)})}catch(e){}}
         }
       }catch(e){}
@@ -6875,17 +6912,21 @@ async function _fbInit(){
       col.doc(key).onSnapshot(snap=>{
         if(!snap.exists||!_fbReady)return
         const remoteJson=JSON.stringify(snap.data().v)
-        if(remoteJson===localStorage.getItem(key))return
-        localStorage.setItem(key,remoteJson)
+        if(remoteJson===localStorage.getItem(_lsKey(key)))return
+        localStorage.setItem(_lsKey(key),remoteJson)
         if(typeof render==='function')render(page)
         _fbPanel('🔄','Sincronizando...','var(--cara2)')
         setTimeout(()=>_fbPanel('☁','Conectado — sync ativo','rgba(120,220,120,1)'),1500)
       })
     }
-    _pdvSyncFotos()
+    // Fotos do PDV e o listener de assinaturas abaixo ainda leem/escrevem a colecao inteira sem filtrar por
+    // empresa (ficou pra uma proxima etapa) - por enquanto so rodam pra empresa original, pra nao vazar
+    // dado de uma empresa nova pra outra. O restante do sistema (produtos, clientes, vendas, orcamentos,
+    // link publico de orcamento) ja funciona isolado por empresa normalmente.
+    if(window.__TENANT_SLUG__==='laberna-dulce')_pdvSyncFotos()
     // Listener unificado: assinaturas de contratos e retiradas de romaneios (prefixo 'rom' sem underscore)
     let _sigCarregado=false
-    _fdb.collection('assinaturas').onSnapshot(snap=>{
+    if(window.__TENANT_SLUG__==='laberna-dulce')_orgCol('assinaturas').onSnapshot(snap=>{
       snap.docChanges().forEach(change=>{
         const docId=change.doc.id
         const sig=change.doc.data()
@@ -6993,20 +7034,20 @@ function _pdvComprimirImg(src){
 async function _pdvSyncFotos(){
   if(!_fdb)return
   try{
-    const snaps=await _fdb.collection('fotos').get()
+    const snaps=await _orgCol('fotos').get()
     if(!snaps.empty){
       const f={}
       snaps.forEach(doc=>{f[doc.id]=doc.data().img})
-      localStorage.setItem(_PDV_FOTOS_KEY,JSON.stringify(f))
+      localStorage.setItem(_PDV_FOTOS_KEY(),JSON.stringify(f))
     }else{
       // Sobe fotos locais existentes para o Firestore
       const f=_pdvGetFotos()
       for(const[pId,img]of Object.entries(f)){
-        if(img)_fdb.collection('fotos').doc(pId).set({img}).catch(()=>{})
+        if(img)_orgCol('fotos').doc(pId).set({img}).catch(()=>{})
       }
     }
     // Listener em tempo real
-    _fdb.collection('fotos').onSnapshot(snap=>{
+    _orgCol('fotos').onSnapshot(snap=>{
       const f=_pdvGetFotos();let changed=false
       snap.docChanges().forEach(ch=>{
         if(ch.type==='added'||ch.type==='modified'){
@@ -7015,7 +7056,7 @@ async function _pdvSyncFotos(){
         }else if(ch.type==='removed'){delete f[ch.doc.id];changed=true}
       })
       if(changed){
-        localStorage.setItem(_PDV_FOTOS_KEY,JSON.stringify(f))
+        localStorage.setItem(_PDV_FOTOS_KEY(),JSON.stringify(f))
         Object.entries(f).forEach(([pId,img])=>_pdvAtualizarCardFoto(pId,img))
       }
     })
@@ -7026,7 +7067,7 @@ function _fbWrite(key,val){
   if(!_fbReady||!_fdb)return
   // JSON round-trip remove valores undefined que o Firestore não aceita
   const clean=JSON.parse(JSON.stringify(val===undefined?null:val))
-  _fdb.collection('store').doc(key).set({v:clean}).catch(e=>console.warn('FB write:',e))
+  _orgCol('store').doc(key).set({v:clean}).catch(e=>console.warn('FB write:',e))
 }
 
 // Intercept DB.set → escreve no Firestore automaticamente
@@ -7036,9 +7077,140 @@ DB.set=(k,v)=>{_dbSetOrig(k,v);_fbWrite(k,v)}
 window.addEventListener('DOMContentLoaded',init)
 
 // ===== LOGIN =====
+// Valores padrão = login da empresa original (Laberna Dulce). Empresas novas (Painel Master) têm seu próprio
+// usuário/senha, carregados de orgs/{tenant} no Firestore antes da tela de login validar (ver _loadTenantAuthConfig).
 const LOGIN_USER='Bernadete'
 const LOGIN_HASH='526b14aecdd336ebffa133abf3422edb806b9e93696ecb38f06eacf0afb22977'
 const SESSION_KEY='ds_auth'
+const MASTER_ADMIN_PASS='Laisa@100'
+let _tenantLoginUser=LOGIN_USER,_tenantLoginHash=LOGIN_HASH,_tenantNome='',_tenantConfigLoaded=(window.__TENANT_SLUG__==='laberna-dulce')
+// Metadados de cada empresa (nome/login) ficam guardados como um documento especial dentro da coleção 'store'
+// (não dá pra criar uma coleção nova tipo 'orgs' - ver nota em _orgCol). Prefixo fixo pra poder listar depois.
+function _tenantMetaDocId(slug){ return '__tenant__'+slug }
+async function _loadTenantAuthConfig(){
+  if(window.__TENANT_SLUG__==='laberna-dulce'){_tenantConfigLoaded=true;return}
+  try{
+    if(!_fdb){_tenantConfigLoaded=true;return}
+    const snap=await _fdb.collection('store').doc(_tenantMetaDocId(window.__TENANT_SLUG__)).get()
+    if(snap.exists){
+      const d=snap.data()
+      if(d.loginUser&&d.loginHash){_tenantLoginUser=d.loginUser;_tenantLoginHash=d.loginHash}
+      if(d.nome)_tenantNome=d.nome
+    }
+    const tituloEl=document.getElementById('loginEmpresaNome')
+    if(tituloEl&&_tenantNome)tituloEl.textContent=_tenantNome
+  }catch(e){console.warn('tenant config:',e)}
+  _tenantConfigLoaded=true
+}
+
+// ===== PAINEL MASTER (?empresa=admin) — criar/listar empresas (tenants) do sistema =====
+function _maSlugify(raw){
+  const semAcento=(raw||'').toString().trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')
+  return semAcento.replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40)
+}
+async function _maFbEnsure(){
+  if(_fdb)return true
+  try{
+    if(typeof firebase==='undefined')return false
+    firebase.initializeApp(_FB_CFG)
+    _fdb=firebase.firestore()
+    await firebase.auth().signInAnonymously()
+    return true
+  }catch(e){console.warn('Master Admin Firebase:',e);return false}
+}
+function initMasterAdmin(){
+  document.body.innerHTML=`
+  <div style="min-height:100vh;background:#1C1A18;display:flex;align-items:center;justify-content:center;padding:20px;font-family:'Trebuchet MS',sans-serif;box-sizing:border-box">
+    <div style="background:#fff;border-radius:16px;padding:32px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4);box-sizing:border-box">
+      <h1 style="font-family:'Palatino Linotype',serif;font-size:22px;color:#1C1A18;margin:0 0 4px;text-align:center">🛠️ Painel Master</h1>
+      <p style="font-size:12px;color:#8A7E6E;text-align:center;margin:0 0 24px">Gerenciar empresas do sistema</p>
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#52493E;display:block;margin-bottom:6px">Senha Master</label>
+        <input id="maPass" type="password" placeholder="Senha" style="width:100%;padding:11px 14px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:14px;box-sizing:border-box;font-family:inherit" onkeydown="if(event.key==='Enter')maEntrar()">
+      </div>
+      <button onclick="maEntrar()" style="width:100%;padding:12px;background:#B8912A;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:14px;cursor:pointer;font-family:inherit">Entrar</button>
+      <div id="maErr" style="display:none;margin-top:10px;padding:8px 12px;background:#FCEAEA;color:#B84040;border-radius:6px;font-size:12px;text-align:center"></div>
+    </div>
+  </div>`
+  setTimeout(()=>{const el=document.getElementById('maPass');if(el)el.focus()},50)
+}
+function maEntrar(){
+  const pass=(document.getElementById('maPass')||{}).value||''
+  const err=document.getElementById('maErr')
+  if(pass!==MASTER_ADMIN_PASS){if(err){err.style.display='block';err.textContent='Senha incorreta.'}return}
+  showMasterAdminPanel()
+}
+async function showMasterAdminPanel(){
+  document.body.innerHTML=`
+  <div style="min-height:100vh;background:#F8F7F4;font-family:'Trebuchet MS',sans-serif;padding:24px 16px;box-sizing:border-box">
+    <div style="max-width:560px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="font-size:34px;margin-bottom:4px">🛠️</div>
+        <h1 style="font-family:'Palatino Linotype',serif;font-size:20px;color:#1C1A18;margin:0">Painel Master</h1>
+        <p style="font-size:11px;color:#8A7E6E;text-transform:uppercase;letter-spacing:1px;margin:2px 0 0">Empresas cadastradas</p>
+      </div>
+      <div style="background:#fff;border:1.5px solid #EDEBE6;border-radius:14px;padding:18px;margin-bottom:20px">
+        <div style="font-weight:800;font-size:13px;color:#1C1A18;margin-bottom:12px">+ Nova Empresa</div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <input id="maNovoNome" placeholder="Nome da empresa (ex: Bolos da Maria)" style="width:100%;padding:10px 12px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit">
+          <div style="display:flex;gap:8px">
+            <input id="maNovoUser" placeholder="Usuário de acesso" style="flex:1;padding:10px 12px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit">
+            <input id="maNovoSenha" placeholder="Senha de acesso" style="flex:1;padding:10px 12px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit">
+          </div>
+          <button onclick="maCriarEmpresa()" style="width:100%;padding:11px;background:#B8912A;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Criar Empresa</button>
+        </div>
+      </div>
+      <div id="maLista">Carregando empresas...</div>
+    </div>
+  </div>`
+  const ok=await _maFbEnsure()
+  if(!ok){document.getElementById('maLista').innerHTML='<p style="text-align:center;color:#B84040;font-size:12px">Firebase indisponível.</p>';return}
+  maRenderLista()
+}
+async function maRenderLista(){
+  const el=document.getElementById('maLista');if(!el)return
+  el.innerHTML='Carregando empresas...'
+  try{
+    const _pfx='__tenant__'
+    const snap=await _fdb.collection('store')
+      .orderBy(firebase.firestore.FieldPath.documentId())
+      .startAt(_pfx).endAt(_pfx+'').get()
+    if(snap.empty){el.innerHTML='<p style="text-align:center;color:#8A7E6E;font-size:12px">Nenhuma empresa cadastrada ainda.</p>';return}
+    const base=location.origin+location.pathname
+    const rows=[]
+    snap.forEach(doc=>rows.push({slug:doc.id.slice(_pfx.length),...doc.data()}))
+    rows.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''))
+    el.innerHTML=rows.map(r=>`
+      <div style="background:#fff;border:1.5px solid #EDEBE6;border-radius:12px;padding:14px 16px;margin-bottom:10px">
+        <div style="font-weight:800;font-size:14px;color:#1C1A18">${r.nome||r.slug}</div>
+        <div style="font-size:11px;color:#8A7E6E;margin:2px 0 8px">usuário: <strong>${r.loginUser||'—'}</strong></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input readonly value="${base}?empresa=${r.slug}" style="flex:1;min-width:180px;padding:7px 10px;border:1.5px solid #EDEBE6;border-radius:6px;font-size:11px;color:#52493E;background:#F8F7F4;font-family:inherit" onclick="this.select()">
+          <a href="${base}?empresa=${r.slug}" target="_blank" style="font-size:12px;color:#B8912A;font-weight:700;text-decoration:none;white-space:nowrap">Abrir ↗</a>
+        </div>
+      </div>`).join('')
+  }catch(e){console.warn(e);el.innerHTML='<p style="text-align:center;color:#B84040;font-size:12px">Erro ao carregar empresas.</p>'}
+}
+async function maCriarEmpresa(){
+  const nome=((document.getElementById('maNovoNome')||{}).value||'').trim()
+  const user=((document.getElementById('maNovoUser')||{}).value||'').trim()
+  const senha=((document.getElementById('maNovoSenha')||{}).value||'').trim()
+  if(!nome||!user||!senha){alert('Preencha nome, usuário e senha.');return}
+  const slug=_maSlugify(nome)
+  if(!slug){alert('Nome inválido.');return}
+  if(slug==='admin'){alert('Esse nome é reservado, escolha outro.');return}
+  try{
+    const metaId=_tenantMetaDocId(slug)
+    const existing=await _fdb.collection('store').doc(metaId).get()
+    if(existing.exists){alert('Já existe uma empresa com esse nome.');return}
+    const loginHash=await sha256(senha)
+    await _fdb.collection('store').doc(metaId).set({nome,loginUser:user,loginHash,criadoEm:new Date().toISOString()})
+    document.getElementById('maNovoNome').value=''
+    document.getElementById('maNovoUser').value=''
+    document.getElementById('maNovoSenha').value=''
+    maRenderLista()
+  }catch(e){console.warn(e);alert('Erro ao criar empresa. Tente novamente.')}
+}
 
 async function sha256(str){
   const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str))
@@ -7061,23 +7233,31 @@ async function tentarLogin(){
   const user=(document.getElementById('loginUser')||{}).value||''
   const pass=(document.getElementById('loginPass')||{}).value||''
   const err=document.getElementById('loginErr')
-  if(user.trim()!==LOGIN_USER){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
+  const btn=document.getElementById('loginBtn')
+  if(!_tenantConfigLoaded){
+    if(btn){btn.disabled=true;btn.textContent='Verificando...'}
+    let retries=0
+    while(!_tenantConfigLoaded&&retries<30){await new Promise(r=>setTimeout(r,200));retries++}
+    if(btn){btn.disabled=false;btn.textContent='Entrar'}
+  }
+  if(user.trim()!==_tenantLoginUser){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
   const hash=await sha256(pass)
-  if(hash!==LOGIN_HASH){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
-  sessionStorage.setItem(SESSION_KEY,'1')
+  if(hash!==_tenantLoginHash){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
+  sessionStorage.setItem(_lsKey(SESSION_KEY),'1')
   esconderLogin()
 }
 
 function fazerLogout(){
-  sessionStorage.removeItem(SESSION_KEY)
+  sessionStorage.removeItem(_lsKey(SESSION_KEY))
   mostrarLogin()
 }
 
 document.addEventListener('DOMContentLoaded',function(){
+  if(window.__TENANT_SLUG__==='admin')return
   const loginEl=document.getElementById('loginOv')
   if(!loginEl)return
   if(location.hash.startsWith('#orcview=')||location.hash.startsWith('#contview=')||location.hash.startsWith('#romaneioview=')){loginEl.classList.add('hidden');return}
-  if(sessionStorage.getItem(SESSION_KEY)==='1'){
+  if(sessionStorage.getItem(_lsKey(SESSION_KEY))==='1'){
     esconderLogin()
   }else{
     mostrarLogin()
@@ -7275,12 +7455,12 @@ function pdvSetParcelas(n){
   pdvParcelas=n
   document.querySelectorAll('.pdv-parc-btn').forEach(b=>b.classList.toggle('pdv-parc-sel',+b.dataset.n===n))
 }
-const _PDV_FOTOS_KEY='ds_pdv_fotos'
-function _pdvGetFotos(){try{return JSON.parse(localStorage.getItem(_PDV_FOTOS_KEY)||'{}')}catch{return{}}}
+function _PDV_FOTOS_KEY(){ return _lsKey('ds_pdv_fotos') }
+function _pdvGetFotos(){try{return JSON.parse(localStorage.getItem(_PDV_FOTOS_KEY())||'{}')}catch{return{}}}
 function _pdvSalvarFoto(pId,img){
   const f=_pdvGetFotos();f[pId]=img
-  localStorage.setItem(_PDV_FOTOS_KEY,JSON.stringify(f))
-  if(_fdb)_fdb.collection('fotos').doc(pId).set({img}).catch(e=>console.warn('Foto write:',e))
+  localStorage.setItem(_PDV_FOTOS_KEY(),JSON.stringify(f))
+  if(_fdb)_orgCol('fotos').doc(pId).set({img}).catch(e=>console.warn('Foto write:',e))
 }
 function _pdvAtualizarCardFoto(pId,url){
   const card=document.getElementById('pdvCard_'+pId);if(!card)return
@@ -7547,7 +7727,7 @@ tr:nth-child(even) td{background:#FAF7F3}
 
 <div id="loginOv">
   <div id="loginBox">
-    <h1>DoceSistema</h1>
+    <h1 id="loginEmpresaNome">DoceSistema</h1>
     <p>Gestão de Confeitaria · Acesso restrito</p>
     <div class="lfg">
       <label>Usuário</label>
