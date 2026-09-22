@@ -6187,7 +6187,7 @@ function showClientView(raw,docId){
   </style>
   <div class="cv-wrap">
     <div class="cv-doc">
-
+      ${_cvBackStack.length?`<div style="margin-bottom:16px"><a href="#" onclick="event.preventDefault();_cvVoltar()" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7B5EA7;font-weight:700;text-decoration:none;padding:8px 12px;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px">← Voltar</a></div>`:''}
       <div class="cv-cab">
         <div class="cv-cab-left">
           ${_logoHtml?`<div style="flex-shrink:0">${_logoHtml}</div>`:''}
@@ -6442,16 +6442,28 @@ function copiarLinkCont(){
   }).catch(()=>{el.select();document.execCommand('copy')})
 }
 
+// Pilha de telas anteriores dentro do link público (contrato <-> orçamento), pra dar pra "Voltar" sem
+// precisar fechar e reabrir o site - navegação nessas páginas é tudo via JS, sem reload de verdade.
+let _cvBackStack=[]
+function _cvVoltar(){
+  const prev=_cvBackStack.pop()
+  if(!prev)return
+  history.pushState(null,'',location.href.split('#')[0]+(prev.tipo==='cont'?'#contview=':'#orcview=')+prev.id)
+  if(prev.tipo==='cont')showContView(prev.dados)
+  else showClientView(prev.dados,prev.id)
+}
 // Abre o orçamento original a partir do link do contrato sem recarregar a página - um <a href="#orcview=..."> sozinho
 // só troca a URL (não recarrega), e checkClientView() só roda uma vez no carregamento inicial da página.
 async function _cvAbrirOrcamento(oid){
   if(!oid)return
+  const _contIdAtual=location.hash.startsWith('#contview=')?location.hash.slice(10):null
   history.pushState(null,'',location.href.split('#')[0]+'#orcview='+oid)
   let t=0;while(!_fbAuthReady&&t<30){await new Promise(r=>setTimeout(r,300));t++}
   if(!_fdb){toast('Firebase indisponível no momento.','err');return}
   try{
     const snap=await _orgCol('contratos_pub').doc(oid).get()
     if(!snap.exists){toast('Orçamento não encontrado.','err');return}
+    if(_contIdAtual&&window._cvD)_cvBackStack.push({tipo:'cont',id:_contIdAtual,dados:window._cvD})
     showClientView(snap.data(),oid)
   }catch(e){console.warn(e);toast('Erro ao abrir o orçamento.','err')}
 }
@@ -6485,6 +6497,7 @@ function showContView(d){
     @media(max-width:600px){.cvcd{padding:14px}.cvch{flex-direction:column;align-items:flex-start;gap:12px}}
   </style>
   <div class="cvcw"><div class="cvcd">
+    ${_cvBackStack.length?`<div style="margin-bottom:16px"><a href="#" onclick="event.preventDefault();_cvVoltar()" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7B5EA7;font-weight:700;text-decoration:none;padding:8px 12px;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:8px">← Voltar</a></div>`:''}
     <div class="cvch">
       <div style="display:flex;align-items:center;gap:16px">
         ${logoHtml?`<div style="flex-shrink:0">${logoHtml}</div>`:''}
@@ -6796,8 +6809,9 @@ function _cvGerarComprovante(nome,agora,num,total,ip,device,browser){
     </div>
     <div class="footer">Gerado em ${agora} — ${d.n||'Laberna Dulce'} ${d.ea?'— '+d.ea:''}</div>
   </div>
-  <div style="text-align:center;margin-top:16px">
+  <div style="text-align:center;margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <button onclick="window.print()" style="padding:12px 28px;background:#3D3028;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">🖨️ Salvar / Imprimir Comprovante</button>
+    <button onclick="window.close()" style="padding:12px 28px;background:#fff;color:#3D3028;border:1.5px solid #C4B09A;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">← Fechar e Voltar</button>
   </div>
   </body></html>`)
   w.document.close()
@@ -6857,8 +6871,9 @@ async function _cvGerarComprovantePagamento(){
     </div>
     <div class="footer">Gerado em ${agora} — ${d.n||''} ${d.ea?'— '+d.ea:''}</div>
   </div>
-  <div style="text-align:center;margin-top:16px">
+  <div style="text-align:center;margin-top:16px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
     <button onclick="window.print()" style="padding:12px 28px;background:#3D3028;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">🖨️ Salvar / Imprimir Comprovante</button>
+    <button onclick="window.close()" style="padding:12px 28px;background:#fff;color:#3D3028;border:1.5px solid #C4B09A;border-radius:8px;font-size:14px;cursor:pointer;font-family:'Trebuchet MS',sans-serif">← Fechar e Voltar</button>
   </div>
   </body></html>`)
   w.document.close()
