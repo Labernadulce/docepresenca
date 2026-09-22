@@ -465,12 +465,19 @@ function calcPlanoPagamento(totalF,entradaPct,entradaData,parcelas,parcela1Data,
   }
   return plano
 }
-// Ao regerar o plano (mudou nº de parcelas/datas/entrada), preserva se cada parcela já tinha sido
-// marcada como paga antes, casando pela posição - senão toda vez que o formulário fosse salvo de novo
-// (ex: só editando uma cláusula) o "pago" de cada parcela voltaria a zero.
+// Reabrir e salvar o formulário do contrato (ex: só pra mudar uma cláusula) recalcula o plano de
+// pagamento do zero a partir dos campos "Vencimento da 1ª parcela"/"Repetir a cada" - sem isso, qualquer
+// ajuste feito depois em "Ver Parcelas" (data adiada, marcado como pago) seria apagado de novo. Então,
+// pra parcelas que já existiam antes (mesma posição), mantém a data E o status de pago que já tinham;
+// só usa o valor recém-calculado pra parcelas novas (ex: aumentou de 5 pra 6 parcelas).
 function preservarParcelasPagas(planoNovo,planoAntigo){
   if(!Array.isArray(planoAntigo))return planoNovo
-  planoNovo.forEach((p,i)=>{if(planoAntigo[i]&&planoAntigo[i].pago)p.pago=true})
+  planoNovo.forEach((p,i)=>{
+    if(planoAntigo[i]){
+      if(planoAntigo[i].pago)p.pago=true
+      if(planoAntigo[i].data)p.data=planoAntigo[i].data
+    }
+  })
   return planoNovo
 }
 // Lista (uma linha por pagamento) com valor e data de vencimento - usado na prévia do formulário,
