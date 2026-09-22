@@ -1584,7 +1584,7 @@ function _contModal(titulo,c,orcc){
     <div class="frow">
       <div class="fg"><label>Data da Entrega</label><input type="date" id="coDataEntrega" value="${c?.dataEntrega||orcc?.dataEntrega||''}"></div>
       <div class="fg"><label>Horário</label><input type="time" id="coHoraEntrega" value="${c?.horaEntrega||orcc?.horaEntrega||''}"></div>
-      <div class="fg"><label>Modalidade</label><select id="coEntrega"><option value="retira" ${(c?.entrega||orcc?.entrega||'retira')==='retira'?'selected':''}>Cliente Retira</option><option value="entrega" ${(c?.entrega||orcc?.entrega)==='entrega'?'selected':''}>Laberna Entrega</option></select></div>
+      <div class="fg"><label>Modalidade</label><select id="coEntrega"><option value="retira" ${(c?.entrega||orcc?.entrega||'retira')==='retira'?'selected':''}>Cliente Retira</option><option value="entrega" ${(c?.entrega||orcc?.entrega)==='entrega'?'selected':''}>Laberna Entrega</option><option value="combinar" ${(c?.entrega||orcc?.entrega)==='combinar'?'selected':''}>A combinar</option></select></div>
     </div>
     <div class="fg"><label>Endereço de Entrega</label><input id="coEndEntrega" value="${c?.endEntrega||orcc?.endEntrega||''}" placeholder="Rua, número, bairro..."></div>
     <div class="frow">
@@ -1673,8 +1673,9 @@ function salvarCont(editId,orcId){
   const cl2Custom=(document.getElementById('coCl2')||{}).value||''
   const cl3Custom=(document.getElementById('coCl3')||{}).value||''
   const entradaData=(document.getElementById('coEntradaData')||{}).value||undefined
-  const cl2=cl2Custom||`O valor total do presente contrato é de ${fmt(totalF)}.${entrada>0?` O valor de ${fmt(entrada)} deverá ser pago a título de sinal/entrada${entradaData?' até o dia '+fmtDate(entradaData):''}. O saldo restante de ${fmt(totalF-entrada)} deverá ser quitado no ato da ${entrega==='entrega'?'entrega':'retirada'}.`:''}`
-  const cl3=cl3Custom||(dataEntrega?`A ${entrega==='entrega'?'entrega':'retirada'} está prevista para o dia ${fmtDate(dataEntrega)}${horaEntrega?' às '+horaEntrega:''}.${endEntrega?' Endereço: '+endEntrega:''}`:'')||'A data de entrega/retirada será confirmada conforme acordado entre as partes.'
+  const entregaTxt=entrega==='entrega'?'entrega':(entrega==='combinar'?'entrega/retirada (a combinar entre as partes)':'retirada')
+  const cl2=cl2Custom||`O valor total do presente contrato é de ${fmt(totalF)}.${entrada>0?` O valor de ${fmt(entrada)} deverá ser pago a título de sinal/entrada${entradaData?' até o dia '+fmtDate(entradaData):''}. O saldo restante de ${fmt(totalF-entrada)} deverá ser quitado no ato da ${entregaTxt}.`:''}`
+  const cl3=cl3Custom||(dataEntrega?`A ${entregaTxt} está prevista para o dia ${fmtDate(dataEntrega)}${horaEntrega?' às '+horaEntrega:''}.${endEntrega?' Endereço: '+endEntrega:''}`:'')||'A data de entrega/retirada será confirmada conforme acordado entre as partes.'
   const novoCampos={
     cliId,data,
     noivos:(document.getElementById('coNoivos')||{}).value||undefined,
