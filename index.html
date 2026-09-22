@@ -597,6 +597,7 @@ function initSample(){
 // ===== ROUTER =====
 let _navHist=['dashboard'], _navIdx=0
 function navigate(p){
+  if(!_moduloPermitido(p))p='dashboard'
   if(_navHist[_navIdx]===p)return _navApply(p)
   _navHist=_navHist.slice(0,_navIdx+1)
   _navHist.push(p)
@@ -7083,7 +7084,25 @@ const LOGIN_USER='Bernadete'
 const LOGIN_HASH='526b14aecdd336ebffa133abf3422edb806b9e93696ecb38f06eacf0afb22977'
 const SESSION_KEY='ds_auth'
 const MASTER_ADMIN_PASS='Laisa@100'
+// Catálogo de módulos que podem ser habilitados/desabilitados por empresa (pacote de venda).
+// Dashboard e "Minha Empresa" não entram aqui - toda empresa tem acesso a eles sempre.
+const MODULOS_CATALOGO=[
+  {key:'vendas',label:'Vendas (PDV)'},
+  {key:'orcamentos',label:'Orçamentos'},
+  {key:'contratos',label:'Contratos'},
+  {key:'romaneio',label:'Romaneio'},
+  {key:'clientes',label:'Clientes'},
+  {key:'estoque',label:'Estoque'},
+  {key:'compras',label:'Compras'},
+  {key:'financeiro',label:'Financeiro'},
+  {key:'producao',label:'Produção'},
+  {key:'os',label:'Ordens de Serviço'},
+  {key:'relatorios',label:'Relatórios'},
+  {key:'receitas',label:'Receitas'},
+]
 let _tenantLoginUser=LOGIN_USER,_tenantLoginHash=LOGIN_HASH,_tenantNome='',_tenantConfigLoaded=(window.__TENANT_SLUG__==='laberna-dulce')
+// null = acesso total (empresa original e qualquer doc antigo sem o campo); array = só esses módulos liberados.
+let _tenantModulos=null
 // Metadados de cada empresa (nome/login) ficam guardados como um documento especial dentro da coleção 'store'
 // (não dá pra criar uma coleção nova tipo 'orgs' - ver nota em _orgCol). Prefixo fixo pra poder listar depois.
 // Obs: NÃO pode ser '__algumacoisa__' (prefixo E sufixo com underscore duplo) - o Firestore trata
@@ -7098,11 +7117,25 @@ async function _loadTenantAuthConfig(){
       const d=snap.data()
       if(d.loginUser&&d.loginHash){_tenantLoginUser=d.loginUser;_tenantLoginHash=d.loginHash}
       if(d.nome)_tenantNome=d.nome
+      if(Array.isArray(d.modulos))_tenantModulos=d.modulos
     }
     const tituloEl=document.getElementById('loginEmpresaNome')
     if(tituloEl&&_tenantNome)tituloEl.textContent=_tenantNome
   }catch(e){console.warn('tenant config:',e)}
   _tenantConfigLoaded=true
+}
+// Esconde do menu (lateral + mobile) os módulos que a empresa não contratou, e evita navegar direto pra eles.
+function _moduloPermitido(k){
+  return k==='dashboard'||k==='empresa'||_tenantModulos===null||_tenantModulos.includes(k)
+}
+function _applyModulosVisibilidade(){
+  if(_tenantModulos===null)return
+  document.querySelectorAll('.ni[data-page]').forEach(n=>{
+    n.style.display=_moduloPermitido(n.getAttribute('data-page'))?'':'none'
+  })
+  document.querySelectorAll('.mob-ni[data-mob-page]').forEach(n=>{
+    n.style.display=_moduloPermitido(n.getAttribute('data-mob-page'))?'':'none'
+  })
 }
 
 // ===== PAINEL MASTER (?empresa=admin) — criar/listar empresas (tenants) do sistema =====
@@ -7159,6 +7192,13 @@ async function showMasterAdminPanel(){
             <input id="maNovoUser" placeholder="Usuário de acesso" style="flex:1;padding:10px 12px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit">
             <input id="maNovoSenha" placeholder="Senha de acesso" style="flex:1;padding:10px 12px;border:1.5px solid #EDEBE6;border-radius:8px;font-size:13px;box-sizing:border-box;font-family:inherit">
           </div>
+          <div style="border-top:1px solid #EDEBE6;padding-top:10px;margin-top:2px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+              <span style="font-size:11px;font-weight:700;color:#52493E">Módulos liberados (pacote)</span>
+              <span style="font-size:10px;color:#B8912A;cursor:pointer;font-weight:700" onclick="_maSetAllModCheckboxes('maNovo',true)">marcar todos</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">${_maModCheckboxesHtml('maNovo',[])}</div>
+          </div>
           <button onclick="maCriarEmpresa()" style="width:100%;padding:11px;background:#B8912A;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit">Criar Empresa</button>
         </div>
       </div>
@@ -7168,6 +7208,36 @@ async function showMasterAdminPanel(){
   const ok=await _maFbEnsure()
   if(!ok){document.getElementById('maLista').innerHTML='<p style="text-align:center;color:#B84040;font-size:12px">Firebase indisponível.</p>';return}
   maRenderLista()
+}
+// selecionados===null/undefined -> desenha tudo marcado (acesso total); array -> marca só os que estão nele.
+function _maModCheckboxesHtml(idPrefix,selecionados){
+  const tudo=selecionados===null||selecionados===undefined
+  return MODULOS_CATALOGO.map(m=>{
+    const marcado=tudo||selecionados.includes(m.key)
+    return `<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#52493E;padding:3px 0;cursor:pointer"><input type="checkbox" id="${idPrefix}_${m.key}" ${marcado?'checked':''} style="accent-color:#B8912A;width:15px;height:15px;flex-shrink:0">${m.label}</label>`
+  }).join('')
+}
+function _maReadModCheckboxes(idPrefix){
+  return MODULOS_CATALOGO.filter(m=>{
+    const el=document.getElementById(idPrefix+'_'+m.key)
+    return el&&el.checked
+  }).map(m=>m.key)
+}
+function _maSetAllModCheckboxes(idPrefix,val){
+  MODULOS_CATALOGO.forEach(m=>{const el=document.getElementById(idPrefix+'_'+m.key);if(el)el.checked=val})
+}
+function maToggleMod(slug){
+  const el=document.getElementById('maMod_'+slug)
+  if(el)el.style.display=(el.style.display==='none')?'block':'none'
+}
+async function maSalvarModulos(slug){
+  const idPrefix='maMod_'+slug
+  const modulos=_maReadModCheckboxes(idPrefix)
+  const msg=document.getElementById('maModMsg_'+slug)
+  try{
+    await _fdb.collection('store').doc(_tenantMetaDocId(slug)).set({modulos},{merge:true})
+    if(msg){msg.textContent='Salvo!';msg.style.color='#2EA855';setTimeout(()=>{if(msg)msg.textContent=''},2500)}
+  }catch(e){console.warn(e);if(msg){msg.textContent='Erro ao salvar.';msg.style.color='#B84040'}}
 }
 async function maRenderLista(){
   const el=document.getElementById('maLista');if(!el)return
@@ -7190,6 +7260,16 @@ async function maRenderLista(){
           <input readonly value="${base}?empresa=${r.slug}" style="flex:1;min-width:180px;padding:7px 10px;border:1.5px solid #EDEBE6;border-radius:6px;font-size:11px;color:#52493E;background:#F8F7F4;font-family:inherit" onclick="this.select()">
           <a href="${base}?empresa=${r.slug}" target="_blank" style="font-size:12px;color:#B8912A;font-weight:700;text-decoration:none;white-space:nowrap">Abrir ↗</a>
         </div>
+        <div style="margin-top:8px">
+          <span onclick="maToggleMod('${r.slug}')" style="font-size:11px;color:#52493E;background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">⚙️ Módulos liberados</span>
+        </div>
+        <div id="maMod_${r.slug}" style="display:none;margin-top:10px;padding:12px;background:#F8F7F4;border-radius:8px">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-bottom:8px">${_maModCheckboxesHtml('maMod_'+r.slug,Array.isArray(r.modulos)?r.modulos:null)}</div>
+          <div style="display:flex;gap:10px;align-items:center">
+            <button onclick="maSalvarModulos('${r.slug}')" style="padding:7px 14px;background:#B8912A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">Salvar</button>
+            <span id="maModMsg_${r.slug}" style="font-size:11px"></span>
+          </div>
+        </div>
       </div>`).join('')
   }catch(e){console.warn(e);el.innerHTML='<p style="text-align:center;color:#B84040;font-size:12px">Erro ao carregar empresas.</p>'}
 }
@@ -7206,10 +7286,12 @@ async function maCriarEmpresa(){
     const existing=await _fdb.collection('store').doc(metaId).get()
     if(existing.exists){alert('Já existe uma empresa com esse nome.');return}
     const loginHash=await sha256(senha)
-    await _fdb.collection('store').doc(metaId).set({nome,loginUser:user,loginHash,criadoEm:new Date().toISOString()})
+    const modulos=_maReadModCheckboxes('maNovo')
+    await _fdb.collection('store').doc(metaId).set({nome,loginUser:user,loginHash,criadoEm:new Date().toISOString(),modulos})
     document.getElementById('maNovoNome').value=''
     document.getElementById('maNovoUser').value=''
     document.getElementById('maNovoSenha').value=''
+    _maSetAllModCheckboxes('maNovo',false)
     maRenderLista()
   }catch(e){console.warn(e);alert('Erro ao criar empresa. Tente novamente.')}
 }
@@ -7225,10 +7307,13 @@ function mostrarLogin(){
   document.getElementById('app').style.display='none'
 }
 
-function esconderLogin(){
+async function esconderLogin(){
   const ov=document.getElementById('loginOv')
   if(ov)ov.classList.add('hidden')
   document.getElementById('app').style.display=''
+  let retries=0
+  while(!_tenantConfigLoaded&&retries<30){await new Promise(r=>setTimeout(r,200));retries++}
+  _applyModulosVisibilidade()
 }
 
 async function tentarLogin(){
