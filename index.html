@@ -2556,7 +2556,7 @@ function salvarNovoIngCmp(i){
   const existing=prods.find(p=>p.nome.toLowerCase()===nome.toLowerCase()&&p.tipo==='ingrediente')
   const id=existing?existing.id:genId()
   if(!existing){
-    prods.push({id,nome,tipo:'ingrediente',und,cat,estoque:0,minimo:0,ativo:true,dt:today()})
+    prods.push({id,nome,tipo:'ingrediente',un:und,cat,estoque:0,minimo:0,ativo:true,dt:today()})
     DB.set(S.PRODUTOS,prods)
   }
   tempItems[i]={...tempItems[i],pId:id,nome,_novoMode:false}
