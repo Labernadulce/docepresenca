@@ -7103,6 +7103,11 @@ const MODULOS_CATALOGO=[
 let _tenantLoginUser=LOGIN_USER,_tenantLoginHash=LOGIN_HASH,_tenantNome='',_tenantConfigLoaded=(window.__TENANT_SLUG__==='laberna-dulce')
 // null = acesso total (empresa original e qualquer doc antigo sem o campo); array = só esses módulos liberados.
 let _tenantModulos=null
+// true só pra empresa original (sempre existe) ou quando o doc de metadados dela foi encontrado no Firestore -
+// se uma empresa for excluída pelo Painel Master, o doc some e isso continua false, barrando o login
+// (em vez de cair no usuário/senha padrão da Laberna Dulce, que era um risco de segurança).
+let _tenantExiste=(window.__TENANT_SLUG__==='laberna-dulce')
+let _tenantBloqueada=false
 // Metadados de cada empresa (nome/login) ficam guardados como um documento especial dentro da coleção 'store'
 // (não dá pra criar uma coleção nova tipo 'orgs' - ver nota em _orgCol). Prefixo fixo pra poder listar depois.
 // Obs: NÃO pode ser '__algumacoisa__' (prefixo E sufixo com underscore duplo) - o Firestore trata
@@ -7114,10 +7119,12 @@ async function _loadTenantAuthConfig(){
     if(!_fdb){_tenantConfigLoaded=true;return}
     const snap=await _fdb.collection('store').doc(_tenantMetaDocId(window.__TENANT_SLUG__)).get()
     if(snap.exists){
+      _tenantExiste=true
       const d=snap.data()
       if(d.loginUser&&d.loginHash){_tenantLoginUser=d.loginUser;_tenantLoginHash=d.loginHash}
       if(d.nome)_tenantNome=d.nome
       if(Array.isArray(d.modulos))_tenantModulos=d.modulos
+      if(d.bloqueada===true)_tenantBloqueada=true
     }
     const tituloEl=document.getElementById('loginEmpresaNome')
     if(tituloEl&&_tenantNome)tituloEl.textContent=_tenantNome
@@ -7239,6 +7246,24 @@ async function maSalvarModulos(slug){
     if(msg){msg.textContent='Salvo!';msg.style.color='#2EA855';setTimeout(()=>{if(msg)msg.textContent=''},2500)}
   }catch(e){console.warn(e);if(msg){msg.textContent='Erro ao salvar.';msg.style.color='#B84040'}}
 }
+async function maToggleBloqueio(slug,novoValor){
+  try{
+    await _fdb.collection('store').doc(_tenantMetaDocId(slug)).set({bloqueada:novoValor},{merge:true})
+    maRenderLista()
+  }catch(e){console.warn(e);alert('Erro ao atualizar. Tente novamente.')}
+}
+// Exclusão dupla-confirmada (como no painel do peladaecompromisso): remove só o cadastro/login da empresa,
+// NÃO apaga os dados dela (vendas, produtos, orçamentos etc. continuam guardados no Firestore) - é uma
+// exclusão "reversível na prática" (recriar a empresa com o mesmo nome faz os dados reaparecerem).
+async function maExcluirEmpresa(slug){
+  if(!confirm(`Excluir a empresa "${slug}"?\n\nIsso remove o login dela e tira da lista do Painel Master. Os dados (vendas, produtos, orçamentos etc.) NÃO são apagados, continuam guardados.\n\nPra confirmar, clique OK e digite o identificador dela na próxima caixa.`))return
+  const digitado=prompt(`Digite exatamente "${slug}" para confirmar a exclusão:`)
+  if(digitado!==slug){if(digitado!==null)alert('Não confere. Nada foi excluído.');return}
+  try{
+    await _fdb.collection('store').doc(_tenantMetaDocId(slug)).delete()
+    maRenderLista()
+  }catch(e){console.warn(e);alert('Erro ao excluir. Tente novamente.')}
+}
 async function maRenderLista(){
   const el=document.getElementById('maLista');if(!el)return
   el.innerHTML='Carregando empresas...'
@@ -7253,15 +7278,17 @@ async function maRenderLista(){
     snap.forEach(doc=>rows.push({slug:doc.id.slice(_pfx.length),...doc.data()}))
     rows.sort((a,b)=>(a.nome||'').localeCompare(b.nome||''))
     el.innerHTML=rows.map(r=>`
-      <div style="background:#fff;border:1.5px solid #EDEBE6;border-radius:12px;padding:14px 16px;margin-bottom:10px">
-        <div style="font-weight:800;font-size:14px;color:#1C1A18">${r.nome||r.slug}</div>
+      <div style="background:#fff;border:1.5px solid ${r.bloqueada?'#F3D5D5':'#EDEBE6'};border-radius:12px;padding:14px 16px;margin-bottom:10px">
+        <div style="font-weight:800;font-size:14px;color:#1C1A18;display:flex;align-items:center;gap:8px;flex-wrap:wrap">${r.nome||r.slug}${r.bloqueada?'<span style="font-size:10px;font-weight:700;color:#B84040;background:#FCEAEA;padding:2px 8px;border-radius:20px">🔒 ACESSO SUSPENSO</span>':''}</div>
         <div style="font-size:11px;color:#8A7E6E;margin:2px 0 8px">usuário: <strong>${r.loginUser||'—'}</strong></div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <input readonly value="${base}?empresa=${r.slug}" style="flex:1;min-width:180px;padding:7px 10px;border:1.5px solid #EDEBE6;border-radius:6px;font-size:11px;color:#52493E;background:#F8F7F4;font-family:inherit" onclick="this.select()">
           <a href="${base}?empresa=${r.slug}" target="_blank" style="font-size:12px;color:#B8912A;font-weight:700;text-decoration:none;white-space:nowrap">Abrir ↗</a>
         </div>
-        <div style="margin-top:8px">
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
           <span onclick="maToggleMod('${r.slug}')" style="font-size:11px;color:#52493E;background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">⚙️ Módulos liberados</span>
+          <span onclick="maToggleBloqueio('${r.slug}',${!r.bloqueada})" style="font-size:11px;color:${r.bloqueada?'#2EA855':'#B8912A'};background:#F8F7F4;border:1px solid #EDEBE6;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">${r.bloqueada?'🔓 Desbloquear acesso':'🔒 Bloquear acesso'}</span>
+          <span onclick="maExcluirEmpresa('${r.slug}')" style="font-size:11px;color:#B84040;background:#FCEAEA;border:1px solid #F3D5D5;border-radius:6px;padding:6px 10px;cursor:pointer;font-family:inherit;display:inline-block">🗑️ Excluir</span>
         </div>
         <div id="maMod_${r.slug}" style="display:none;margin-top:10px;padding:12px;background:#F8F7F4;border-radius:8px">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-bottom:8px">${_maModCheckboxesHtml('maMod_'+r.slug,Array.isArray(r.modulos)?r.modulos:null)}</div>
@@ -7313,6 +7340,13 @@ async function esconderLogin(){
   document.getElementById('app').style.display=''
   let retries=0
   while(!_tenantConfigLoaded&&retries<30){await new Promise(r=>setTimeout(r,200));retries++}
+  // Sessão de um dia anterior pode estar válida, mas a empresa ter sido bloqueada/excluída depois - confere de novo aqui.
+  if(!_tenantExiste||_tenantBloqueada){
+    fazerLogout()
+    const err=document.getElementById('loginErr')
+    if(err){err.style.display='block';err.textContent=_tenantBloqueada?'Acesso suspenso. Entre em contato com o suporte.':'Empresa não encontrada.'}
+    return
+  }
   _applyModulosVisibilidade()
 }
 
@@ -7327,6 +7361,8 @@ async function tentarLogin(){
     while(!_tenantConfigLoaded&&retries<30){await new Promise(r=>setTimeout(r,200));retries++}
     if(btn){btn.disabled=false;btn.textContent='Entrar'}
   }
+  if(!_tenantExiste){err.style.display='block';err.textContent='Empresa não encontrada.';return}
+  if(_tenantBloqueada){err.style.display='block';err.textContent='Acesso suspenso. Entre em contato com o suporte.';return}
   if(user.trim()!==_tenantLoginUser){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
   const hash=await sha256(pass)
   if(hash!==_tenantLoginHash){err.style.display='block';err.textContent='Usuário ou senha inválidos.';return}
