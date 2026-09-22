@@ -6560,7 +6560,7 @@ function showContView(d){
           </tr></thead>
           <tbody>${d.it.map((it,i)=>`<tr style="${i%2!==0?'background:#FAF7F4':''}">
             <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#9A8E82;font-weight:700;font-size:11px">${i+1}</td>
-            <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.nome||''}${it.desc?`<span style="font-size:11px;color:#9A8E82;margin-left:6px">${it.desc}</span>`:''}</td>
+            <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.nome||''}${it.obs?`<br><span style="font-size:11px;color:#9A8E82;font-style:italic">${it.obs}</span>`:''}</td>
             <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#3D3028">${it.qtd||1}</td>
             <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;color:#3D3028">${fmt(it.pu||0)}</td>
             <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;font-weight:600;color:#3D3028">${fmt(it.sub||0)}</td>
