@@ -3392,27 +3392,56 @@ function cursoForm(c){
   <div class="fg"><label>Descrição</label><textarea id="cuDescricao" placeholder="Do que se trata este curso...">${c.descricao||''}</textarea></div>
   <div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--cream2)">
     <label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:8px">Materiais (PDFs, links, vídeos)</label>
-    <div style="display:grid;grid-template-columns:90px 1fr 1.4fr 32px;gap:6px;margin-bottom:10px;align-items:center">
-      <select id="cuMatTipo" style="${istl}">
+    <div style="display:grid;grid-template-columns:90px 1fr 1.4fr 32px;gap:6px;margin-bottom:6px;align-items:center">
+      <select id="cuMatTipo" onchange="toggleCuMatAnexo()" style="${istl}">
         <option value="pdf">📄 PDF</option>
         <option value="link">🔗 Link</option>
         <option value="video">🎬 Vídeo</option>
       </select>
       <input id="cuMatNome" placeholder="Nome do material" style="${istl}">
-      <input id="cuMatUrl" placeholder="https://..." style="${istl}">
+      <input id="cuMatUrl" placeholder="https://... (ou anexe um PDF abaixo)" style="${istl}">
       <button class="btn-ic" style="background:var(--cara);color:#fff" onclick="addMaterialCurso()" title="Adicionar material"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="cuMatAnexoRow" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <button type="button" class="btn btn-s btn-sm" onclick="document.getElementById('cuMatFile').click()">📎 Anexar PDF</button>
+      <input type="file" id="cuMatFile" accept=".pdf,application/pdf" style="display:none" onchange="handleCuMatFile(this)">
+      <span id="cuMatFileInfo" style="font-size:11px;color:var(--txt3)">máx. 2 MB</span>
     </div>
     <div id="cuMateriaisList"></div>
   </div>`
+}
+let _cuMatAnexo=null
+function toggleCuMatAnexo(){
+  const row=document.getElementById('cuMatAnexoRow')
+  if(row)row.style.display=v('cuMatTipo')==='pdf'?'flex':'none'
+}
+function handleCuMatFile(input){
+  const file=input.files[0];if(!file)return
+  if(file.size>2*1024*1024){toast('Arquivo muito grande (máx. 2 MB)','err');input.value='';return}
+  const reader=new FileReader()
+  reader.onload=e=>{
+    _cuMatAnexo={name:file.name,type:file.type||'application/pdf',data:e.target.result}
+    const info=document.getElementById('cuMatFileInfo')
+    if(info)info.innerHTML=`✓ ${file.name} <a href="#" onclick="event.preventDefault();_cuMatAnexo=null;document.getElementById('cuMatFile').value='';this.parentElement.textContent='máx. 2 MB'" style="color:var(--bad);margin-left:6px;font-weight:700">remover</a>`
+  }
+  reader.readAsDataURL(file)
 }
 function addMaterialCurso(){
   const tipo=v('cuMatTipo')||'link'
   const nome=v('cuMatNome').trim()
   const url=v('cuMatUrl').trim()
-  if(!nome||!url){toast('Informe o nome e o link do material','err');return}
-  tempItems.push({id:genId(),tipo,nome,url})
+  if(!nome){toast('Informe o nome do material','err');return}
+  if(!url&&!_cuMatAnexo){toast('Cole um link ou anexe um arquivo PDF','err');return}
+  const mat={id:genId(),tipo,nome}
+  if(url)mat.url=url
+  if(_cuMatAnexo)mat.anexo=_cuMatAnexo
+  tempItems.push(mat)
   document.getElementById('cuMatNome').value=''
   document.getElementById('cuMatUrl').value=''
+  document.getElementById('cuMatFile').value=''
+  _cuMatAnexo=null
+  const info=document.getElementById('cuMatFileInfo')
+  if(info)info.textContent='máx. 2 MB'
   renderCursoMateriais()
 }
 function removerMaterialCurso(id){
@@ -3427,7 +3456,7 @@ function renderCursoMateriais(){
       <span style="font-size:15px">${_icTipoMat[m.tipo]||'📎'}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.nome}</div>
-        <div style="font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.url}</div>
+        <div style="font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.anexo?`📎 arquivo anexado (${m.anexo.name})`:(m.url||'')}</div>
       </div>
       <button class="btn-ic btn-d" onclick="removerMaterialCurso('${m.id}')"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>`).join('')
@@ -3446,17 +3475,23 @@ function excluirCurso(id){
     toast('Curso excluído','ok');render('cursos')
   })
 }
+function abrirMaterialCurso(cursoId,matId){
+  const c=DB.get(S.CURSOS).find(x=>x.id===cursoId);if(!c)return
+  const m=(c.materiais||[]).find(x=>x.id===matId);if(!m)return
+  if(m.anexo)verAnexo(m.anexo)
+  else if(m.url)window.open(m.url,'_blank','noopener')
+}
 function verCurso(id){
   const c=DB.get(S.CURSOS).find(x=>x.id===id);if(!c)return
   const matsHtml=(c.materiais||[]).length?(c.materiais||[]).map(m=>`
-    <a href="${m.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--cream2);border-radius:8px;margin-bottom:8px;background:var(--cream);text-decoration:none;color:inherit">
+    <button type="button" onclick="abrirMaterialCurso('${c.id}','${m.id}')" style="display:flex;width:100%;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--cream2);border-radius:8px;margin-bottom:8px;background:var(--cream);text-decoration:none;color:inherit;cursor:pointer;font-family:inherit;text-align:left">
       <span style="font-size:18px">${_icTipoMat[m.tipo]||'📎'}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:var(--txt)">${m.nome}</div>
-        <div style="font-size:11px;color:var(--cara);word-break:break-all">${m.url}</div>
+        <div style="font-size:11px;color:var(--cara);word-break:break-all">${m.anexo?`📎 ${m.anexo.name}`:(m.url||'')}</div>
       </div>
       <span style="color:var(--txt3)">↗</span>
-    </a>`).join(''):`<p style="font-size:13px;color:var(--txt3);font-style:italic">Nenhum material cadastrado</p>`
+    </button>`).join(''):`<p style="font-size:13px;color:var(--txt3);font-style:italic">Nenhum material cadastrado</p>`
   openModal(c.titulo,`
     ${c.categoria?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;display:inline-block;margin-bottom:10px">${c.categoria}</span>`:''}
     ${c.descricao?`<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:16px">${c.descricao}</p>`:''}
