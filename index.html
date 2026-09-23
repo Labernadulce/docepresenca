@@ -648,44 +648,50 @@ function anexoWidget(existing, lbl, buscavel){
     </div>`:''}
   </div>`
 }
-// Busca fotos de exemplo por nome (Wikimedia Commons - não exige chave de API) pra evitar o usuário
-// ter que sair procurando/baixando foto na internet e depois subir manualmente pra cada produto/ingrediente.
+// Busca fotos de exemplo por nome (Openverse - agrega Flickr/Wikimedia/etc, não exige chave de API)
+// pra evitar o usuário ter que sair procurando/baixando foto na internet e subir manualmente.
 let _fotoBuscaResults=[]
 async function buscarFotosProduto(){
   const nomeEl=document.getElementById('pNome')||document.getElementById('rNome')
   const nome=(nomeEl||{}).value||''
   const marca=(document.getElementById('pMarca')||{}).value||''
-  const q=(nome+' '+marca).trim()
-  if(!q){toast('Digite o nome do item primeiro','err');return}
+  const base=(nome+' '+marca).trim()
+  if(!base){toast('Digite o nome do item primeiro','err');return}
   const box=document.getElementById('fotoBuscaResults');if(!box)return
   box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Buscando fotos...</div>'
+  // tenta a frase inteira primeiro; se nao achar nada, vai cortando a ultima palavra e tenta de novo
+  // (ex: "farinha de trigo tradicional" as vezes nao bate com nada, mas "farinha de trigo" acha bastante coisa)
+  const palavras=base.split(/\s+/)
+  let data=null
   try{
-    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent('filetype:bitmap '+q)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=300&format=json&origin=*`
-    const res=await fetch(url)
-    const data=await res.json()
-    const pages=data&&data.query&&data.query.pages?Object.values(data.query.pages):[]
-    _fotoBuscaResults=pages.filter(p=>p.imageinfo&&p.imageinfo[0]&&(p.imageinfo[0].thumburl||p.imageinfo[0].url))
-      .map(p=>({src:p.imageinfo[0].thumburl||p.imageinfo[0].url,titulo:(p.title||'').replace(/^File:/,'')}))
-    if(!_fotoBuscaResults.length){
-      box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Nenhuma foto encontrada pra "'+q+'". Tente outro nome ou envie um arquivo.</div>'
-      return
+    for(let n=palavras.length;n>=1;n--){
+      const q=palavras.slice(0,n).join(' ')
+      const res=await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=8&mature=false`)
+      const d=await res.json()
+      if(d.results&&d.results.length){data=d;break}
     }
-    box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px">
-      ${_fotoBuscaResults.map((r,i)=>`<img src="${r.src}" title="${r.titulo.replace(/"/g,'')}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1.5px solid var(--cream2);cursor:pointer" onclick="selecionarFotoBusca(${i})">`).join('')}
-    </div>
-    <div style="font-size:10px;color:var(--txt3);margin-top:5px">Fotos de banco de imagens (Wikimedia Commons) — clique numa foto pra usar</div>`
-  }catch(err){console.warn('busca de fotos:',err);box.innerHTML='<div style="font-size:12px;color:var(--bad)">Erro ao buscar fotos. Tente novamente.</div>'}
+  }catch(err){console.warn('busca de fotos:',err);box.innerHTML='<div style="font-size:12px;color:var(--bad)">Erro ao buscar fotos. Tente novamente.</div>';return}
+  if(!data||!data.results||!data.results.length){
+    box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Nenhuma foto encontrada pra "'+base+'". Tente outro nome ou envie um arquivo.</div>'
+    return
+  }
+  _fotoBuscaResults=data.results.slice(0,8).map(r=>({src:r.thumbnail||r.url}))
+  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px">
+    ${_fotoBuscaResults.map((r,i)=>`<img src="${r.src}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1.5px solid var(--cream2);cursor:pointer" onclick="selecionarFotoBusca(${i})">`).join('')}
+  </div>
+  <div style="font-size:10px;color:var(--txt3);margin-top:5px">Fotos de banco de imagens (Openverse) — clique numa foto pra usar</div>`
 }
 async function selecionarFotoBusca(i){
   const r=_fotoBuscaResults[i];if(!r)return
   const box=document.getElementById('fotoBuscaResults')
+  const nomeEl=document.getElementById('pNome')||document.getElementById('rNome')
+  const nomeArq=((nomeEl||{}).value||'foto').trim()||'foto'
   try{
     const res=await fetch(r.src)
     const blob=await res.blob()
     const reader=new FileReader()
     reader.onload=e=>{
-      const nomeBase=(r.titulo||'foto').replace(/\.(jpe?g|png|gif|webp)$/i,'')
-      tempAnexo={name:nomeBase+'.jpg',type:blob.type||'image/jpeg',data:e.target.result}
+      tempAnexo={name:nomeArq+'.jpg',type:blob.type||'image/jpeg',data:e.target.result}
       const abox=document.getElementById('anexoBox')
       if(abox)abox.innerHTML=_anexoInner(tempAnexo)
       if(box)box.innerHTML=''
