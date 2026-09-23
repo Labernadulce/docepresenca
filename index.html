@@ -684,7 +684,8 @@ async function selecionarFotoBusca(i){
     const blob=await res.blob()
     const reader=new FileReader()
     reader.onload=e=>{
-      tempAnexo={name:(r.titulo||'foto')+'.jpg',type:blob.type||'image/jpeg',data:e.target.result}
+      const nomeBase=(r.titulo||'foto').replace(/\.(jpe?g|png|gif|webp)$/i,'')
+      tempAnexo={name:nomeBase+'.jpg',type:blob.type||'image/jpeg',data:e.target.result}
       const abox=document.getElementById('anexoBox')
       if(abox)abox.innerHTML=_anexoInner(tempAnexo)
       if(box)box.innerHTML=''
