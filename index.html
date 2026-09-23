@@ -1221,7 +1221,7 @@ function renderOrcTable(){
         ${o.parcelas>1?`<button class="btn-ic" style="margin-right:4px;color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasOrc('${o.id}')">📋</button>`:''}
         ${o.status==='aprovado'?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Ver Assinatura do Cliente" onclick="verAssinaturaOrc('${o.id}')">✍️</button>`:''}
         ${o.status==='aprovado'&&!DB.get(S.VENDAS).find(x=>x.orcId===o.id)?`<button class="btn-ic" style="margin-right:4px;color:var(--ok)" title="Gerar Venda" onclick="gerarVendaDeOrc('${o.id}')">💰</button>`:''}
-        ${o.status==='aprovado'&&!DB.get(S.CONTRATOS).find(x=>x.cliId===o.cliId&&x.status!=='cancelado')?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Gerar Contrato" onclick="gerarContratoDeOrc('${o.id}')">📋</button>`:''}
+        ${o.status==='aprovado'&&!DB.get(S.CONTRATOS).find(x=>x.orcId===o.id&&x.status!=='cancelado')?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Gerar Contrato" onclick="gerarContratoDeOrc('${o.id}')">📃</button>`:''}
         <button class="btn-ic btn-d" title="Excluir" onclick="excluirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       </td>
     </tr>`}).join('')}
@@ -1621,16 +1621,16 @@ function statusOrc(id,status){
   if(status==='aprovado'){
     toast('Orçamento aprovado!','ok')
     const _orcAprov=DB.get(S.ORCAMENTOS).find(x=>x.id===id)||{}
-    const _temContrato=DB.get(S.CONTRATOS).find(x=>x.cliId===_orcAprov.cliId&&x.status!=='cancelado')
+    const _temContrato=DB.get(S.CONTRATOS).find(x=>x.orcId===id&&x.status!=='cancelado')
     openModal('Orçamento Aprovado',
       `<p style="font-size:14px;color:var(--txt);line-height:1.6;padding:6px 0">O que deseja fazer agora?</p>
        <div style="display:flex;flex-direction:column;gap:8px;margin-top:4px">
-         ${_temContrato?`<div style="padding:10px 14px;background:#F5F5F5;border-radius:8px;border:1.5px solid #DDD;font-size:13px;color:#999">📋 <strong>Gerar Contrato</strong> — este cliente já possui contrato ativo</div>`:`<div style="padding:10px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2);font-size:13px;color:var(--txt2)">📋 <strong>Gerar Contrato</strong> — formaliza o acordo com cláusulas e assinatura</div>`}
+         ${_temContrato?`<div style="padding:10px 14px;background:#F5F5F5;border-radius:8px;border:1.5px solid #DDD;font-size:13px;color:#999">📃 <strong>Gerar Contrato</strong> — este orçamento já tem contrato ativo</div>`:`<div style="padding:10px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2);font-size:13px;color:var(--txt2)">📃 <strong>Gerar Contrato</strong> — formaliza o acordo com cláusulas e assinatura</div>`}
          <div style="padding:10px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2);font-size:13px;color:var(--txt2)">🗒 <strong>Ordem de Serviço</strong> — para controlar a produção antes de entregar</div>
          <div style="padding:10px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2);font-size:13px;color:var(--txt2)">💰 <strong>Gerar Venda</strong> — registra pagamento e desconta do estoque</div>
        </div>`,
       `<button class="btn btn-s" onclick="closeModal();render('orcamentos')">Agora não</button>
-       ${_temContrato?'':`<button class="btn btn-s" style="background:#7B5EA7;color:#fff;border-color:#7B5EA7" onclick="closeModal();gerarContratoDeOrc('${id}')">📋 Gerar Contrato</button>`}
+       ${_temContrato?'':`<button class="btn btn-s" style="background:#7B5EA7;color:#fff;border-color:#7B5EA7" onclick="closeModal();gerarContratoDeOrc('${id}')">📃 Gerar Contrato</button>`}
        <button class="btn btn-s" style="background:var(--choc2);color:#fff;border-color:var(--choc2)" onclick="closeModal();gerarOS('${id}')">🗒 Gerar OS</button>
        <button class="btn btn-s" style="background:#5A8FD0;color:#fff;border-color:#5A8FD0" onclick="closeModal();navigate('producao')">🏭 Ir para Produção</button>
        <button class="btn btn-p" style="background:var(--ok)" onclick="closeModal();gerarVendaDeOrc('${id}')">💰 Gerar Venda</button>`)
