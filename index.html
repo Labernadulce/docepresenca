@@ -480,12 +480,22 @@ function preservarParcelasPagas(planoNovo,planoAntigo){
   })
   return planoNovo
 }
-// Lista (uma linha por pagamento) com valor e data de vencimento - usado na prévia do formulário,
-// na impressão, no link do cliente e na cláusula do contrato.
+// Lista (uma linha por pagamento) com valor e data de vencimento, SEM status de pago - usado só na
+// cláusula legal do contrato (texto fixo descrevendo os termos, gerado uma vez ao salvar).
 function planoPagamentoLinhas(plano){
   const linhas=[]
   if(plano.entrada)linhas.push(`Entrada: ${fmt(plano.entrada.valor)}${plano.entrada.data?' — vencimento '+fmtDate(plano.entrada.data):' — sem data definida'}`)
   plano.parcelas.forEach(p=>linhas.push(`Parcela ${p.n}/${plano.parcelas.length}: ${fmt(p.valor)}${p.data?' — vencimento '+fmtDate(p.data):' — sem data definida'}`))
+  return linhas
+}
+// Mesma lista, mas COM status Pago/Pendente em cada linha - usado em qualquer lugar que mostre o
+// cronograma pro vendedor ou pro cliente ver (tela Ver, impressão, link) - aqui sempre precisa mostrar
+// quem já foi pago, senão a lista de parcelas não serve pra nada.
+function planoPagamentoLinhasComStatus(plano){
+  const st=p=>p.pago?'<strong style="color:#2E7D32">✅ PAGO</strong>':'<strong style="color:#B05000">⏳ PENDENTE</strong>'
+  const linhas=[]
+  if(plano.entrada)linhas.push(`Entrada: ${fmt(plano.entrada.valor)}${plano.entrada.data?' — vencimento '+fmtDate(plano.entrada.data):''} — ${st(plano.entrada)}`)
+  plano.parcelas.forEach(p=>linhas.push(`Parcela ${p.n}/${plano.parcelas.length}: ${fmt(p.valor)}${p.data?' — vencimento '+fmtDate(p.data):''} — ${st(p)}`))
   return linhas
 }
 // Campos de formulário (entrada + parcelamento com datas) - reaproveitado no orçamento e no contrato,
@@ -1208,6 +1218,7 @@ function renderOrcTable(){
         <button class="btn-ic" style="margin-right:4px" onclick="editOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" title="Imprimir" onclick="imprimirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" title="Link p/ Cliente" onclick="gerarLinkOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        ${o.parcelas>1?`<button class="btn-ic" style="margin-right:4px;color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasOrc('${o.id}')">📋</button>`:''}
         ${o.status==='aprovado'?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Ver Assinatura do Cliente" onclick="verAssinaturaOrc('${o.id}')">✍️</button>`:''}
         ${o.status==='aprovado'&&!DB.get(S.VENDAS).find(x=>x.orcId===o.id)?`<button class="btn-ic" style="margin-right:4px;color:var(--ok)" title="Gerar Venda" onclick="gerarVendaDeOrc('${o.id}')">💰</button>`:''}
         ${o.status==='aprovado'&&!DB.get(S.CONTRATOS).find(x=>x.cliId===o.cliId&&x.status!=='cancelado')?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Gerar Contrato" onclick="gerarContratoDeOrc('${o.id}')">📋</button>`:''}
@@ -1503,10 +1514,12 @@ function salvarOrc(){
   const parcelas=parcelasVal>1?parcelasVal:undefined
   const parcelaIntervalo=parseInt((document.getElementById('oIntervalo')||{}).value)||undefined
   const parcela1Data=(document.getElementById('oParcela1Data')||{}).value||''
-  // Guarda o plano completo (entrada+parcelas com data de vencimento de cada um), não só a quantidade.
-  const planoCalc=calcPlanoPagamento(totalF,entradaPct||0,entradaData||'',parcelasVal,parcela1Data,parcelaIntervalo||30)
-  const parcelasPlano=(entradaPct||parcelas)?planoCalc.parcelas:undefined
   const orcs=DB.get(S.ORCAMENTOS)
+  const existingOrc=editId?(orcs.find(x=>x.id===editId)||{}):{}
+  // Guarda o plano completo (entrada+parcelas com data de vencimento de cada um), não só a quantidade -
+  // e preserva quem já tinha sido marcado como pago/com data ajustada em "Ver Parcelas" antes.
+  const planoCalc=calcPlanoPagamento(totalF,entradaPct||0,entradaData||'',parcelasVal,parcela1Data,parcelaIntervalo||30)
+  const parcelasPlano=(entradaPct||parcelas)?preservarParcelasPagas(planoCalc.parcelas,existingOrc.parcelasPlano):undefined
   if(editId){
     const idx=orcs.findIndex(x=>x.id===editId)
     if(idx>=0)orcs[idx]={...orcs[idx],cliId,data,validade:(document.getElementById('oValid')||{}).value,itens,total,desc,totalF,opcoes,pgto,entradaPct,entradaData,parcelas,parcelaIntervalo,parcelasPlano,noivos:v('oNoivos'),dataEvento,dataEntrega,horaEntrega,entrega,endEntrega,obs:(document.getElementById('oObs')||{}).value}
@@ -1517,6 +1530,43 @@ function salvarOrc(){
   }
   render(romOrigem?'romaneio':'orcamentos')
   romOrigem=false
+}
+// Mesma tela de "Ver Parcelas" do contrato, só que pro orçamento - se o cliente já começou a pagar
+// antes mesmo de virar contrato formal, ou pra planejar o cronograma já sabendo quem pagou o quê.
+function verParcelasOrc(id){
+  const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
+  const plano=o.parcelasPlano||[]
+  const linha=(lbl,valor,dataVal,pago,idAttr)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
+    <div><strong style="font-size:13px;color:var(--txt)">${lbl}</strong><div style="font-size:12px;color:var(--txt2)">${fmt(valor)}</div></div>
+    <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+      <input type="date" id="poData_${idAttr}" value="${dataVal||''}" style="padding:7px 9px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--txt2)"><input type="checkbox" id="poPago_${idAttr}" ${pago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Pago</label>
+    </div>
+  </div>`
+  let body=''
+  if(o.entradaPct)body+=linha('Entrada / Sinal',o.totalF*o.entradaPct/100,o.entradaData,o.entradaPaga,'entrada')
+  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i))})
+  if(!body)body='<p style="color:var(--txt3);font-size:13px">Este orçamento não tem parcelamento configurado.</p>'
+  openModal('📋 Parcelas — '+clienteNome(o.cliId),body,
+    body?`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarParcelasOrc('${id}')">Salvar</button>`:`<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
+}
+function salvarParcelasOrc(id){
+  const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id);if(i<0)return
+  const o=orcs[i]
+  if(o.entradaPct){
+    o.entradaData=(document.getElementById('poData_entrada')||{}).value||o.entradaData
+    o.entradaPaga=!!(document.getElementById('poPago_entrada')||{}).checked
+  }
+  if(Array.isArray(o.parcelasPlano)&&o.parcelasPlano.length){
+    o.parcelasPlano=o.parcelasPlano.map((p,idx)=>({...p,
+      data:(document.getElementById('poData_'+idx)||{}).value||p.data,
+      pago:!!(document.getElementById('poPago_'+idx)||{}).checked
+    }))
+  }
+  DB.set(S.ORCAMENTOS,orcs)
+  closeModal()
+  renderOrcTable()
+  toast('Parcelas atualizadas!','ok')
 }
 function statusOrc(id,status){
   const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id);if(i<0)return
@@ -1630,7 +1680,7 @@ function verOrc(id){
         <div class="trow bold"><span>Total</span><span>${fmt(o.totalF)}</span></div>
       </div>`
     })()}
-    ${(o.entradaPct||o.parcelas)?`<div style="margin-top:8px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:12px;color:var(--txt2)"><strong style="display:block;margin-bottom:4px;color:var(--txt)">Condição de pagamento</strong>${Array.isArray(o.parcelasPlano)?planoPagamentoLinhas({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData}:null,parcelas:o.parcelasPlano}).map(l=>`<div>${l}</div>`).join(''):condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)}</div>`:''}
+    ${(o.entradaPct||o.parcelas)?`<div style="margin-top:8px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:12px;color:var(--txt2)"><strong style="display:block;margin-bottom:4px;color:var(--txt)">Condição de pagamento</strong>${Array.isArray(o.parcelasPlano)?planoPagamentoLinhasComStatus({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData,pago:o.entradaPaga}:null,parcelas:o.parcelasPlano}).map(l=>`<div>${l}</div>`).join(''):condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)}</div>`:''}
     ${(o.dataEvento||o.dataEntrega||o.entrega==='entrega')?`<div style="margin-top:12px;padding:10px 12px;background:var(--ivory);border-radius:8px;border:1px solid var(--cream2);font-size:13px;display:flex;flex-wrap:wrap;gap:10px 20px">
       ${o.dataEvento?`<span><strong style="color:var(--txt2)">Evento:</strong> ${fmtDate(o.dataEvento)}</span>`:''}
       ${o.dataEntrega?`<span><strong style="color:var(--txt2)">Entrega:</strong> ${fmtDate(o.dataEntrega)}${o.horaEntrega?' às '+o.horaEntrega:''}</span>`:''}
@@ -1932,12 +1982,14 @@ function imprimirCont(id){
       <tbody>${rows}</tbody>
     </table>
     <div class="total-row"><span>VALOR TOTAL</span><span>${fmt(c.totalF)}</span></div>
-    ${c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>${c.parcelas>1?`Saldo (${c.parcelas}x de ${fmt((c.totalF-c.entrada)/c.parcelas)})`:'Saldo a Pagar'}</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>`:''}`
+    ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?`<div style="padding:10px 12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none;font-size:12px">${planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}</div>`
+      :(c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Saldo a Pagar</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>`:'')}`
   }else{
     prodBlock=`<div style="margin:14px 0;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:13px">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Valor do Contrato</div>
       <div style="font-size:20px;font-weight:700;color:#3D3028">${fmt(c.totalF)}</div>
-      ${c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; ${c.parcelas>1?`Saldo em ${c.parcelas}x`:'Saldo'}: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:''}
+      ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-top:4px;font-size:12px;color:#6A5E52">${l}</div>`).join('')
+        :(c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; Saldo: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:'')}
     </div>`
   }
   const clausulas=[
@@ -5993,7 +6045,7 @@ function imprimirOrc(id){
     </div>
     ${(o.entradaPct||o.parcelas)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
-      ${(Array.isArray(o.parcelasPlano)?planoPagamentoLinhas({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData}:null,parcelas:o.parcelasPlano}):[condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+      ${(Array.isArray(o.parcelasPlano)?planoPagamentoLinhasComStatus({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData,pago:o.entradaPaga}:null,parcelas:o.parcelasPlano}):[condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
     </div>`:''}
     ${cliBlock(cli)}
     ${prodBlockHtml}`
@@ -6120,6 +6172,7 @@ async function gerarLinkOrc(id){
   if(o.pgto)p.pg=o.pgto
   if(o.entradaPct)p.ep=o.entradaPct
   if(o.entradaData)p.ed=o.entradaData
+  if(o.entradaPaga)p.epg=true
   if(o.parcelas)p.pc=o.parcelas
   if(Array.isArray(o.parcelasPlano))p.pp=o.parcelasPlano
   if(o.endEntrega)p.xe=o.endEntrega
@@ -6265,17 +6318,17 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano
+  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
   if(raw.o){
     const {o,cli,e}=raw
     nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
-    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano
+    nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano;entradaPaga=!!o.entradaPaga
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
     nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
-    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp
+    nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp;entradaPaga=!!raw.epg
     itens=(raw.it||[]).map(x=>{
       if(!Array.isArray(x))return{n:x.n,q:x.q,pu:x.pu||0,s:x.s,c:x.c||'Outros',foto:x.f||'',obs:x.o||''}
       return x.length>=5?{n:x[0],q:x[1],pu:x[2],s:x[3],c:x[4]||'Outros',foto:x[5]||'',obs:x[6]||''}:{n:x[0],q:x[1],pu:0,s:x[2],c:x[3]||'Outros'}
@@ -6316,7 +6369,7 @@ function showClientView(raw,docId){
   if(xe)_infoCells.push(_infoCell('Endereço de Entrega',xe))
   const _planoPagHtml=(entradaPct||parcelas>1)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
-    ${(Array.isArray(parcelasPlano)?planoPagamentoLinhas({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+    ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
