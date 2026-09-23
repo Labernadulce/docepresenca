@@ -3471,6 +3471,12 @@ function renderCursoMateriais(){
 function salvarCurso(){
   const titulo=v('cuTitulo')
   if(!titulo.trim()){toast('Informe o título do curso','err');return}
+  // se a pessoa anexou um PDF ou colou um link mas esqueceu de clicar no "+" pra adicionar, adiciona sozinho agora
+  // (em vez de deixar o anexo se perder silenciosamente ao salvar o curso)
+  if(_cuMatAnexo||v('cuMatUrl').trim()){
+    if(!v('cuMatNome').trim())document.getElementById('cuMatNome').value=_cuMatAnexo?_cuMatAnexo.name.replace(/\.[^.]+$/,''):'Material'
+    addMaterialCurso()
+  }
   // os pedacos dos PDFs (_pendingChunks) nunca entram no registro do curso - so vao pro Firestore separado
   const materiaisFinal=tempItems.map(m=>({id:m.id,tipo:m.tipo,nome:m.nome,url:m.url,anexoMeta:m.anexoMeta}))
   const c={id:editId||genId(),titulo:titulo.trim(),categoria:v('cuCategoria'),descricao:(document.getElementById('cuDescricao')||{}).value||'',materiais:materiaisFinal,dt:editId?(DB.get(S.CURSOS).find(x=>x.id===editId)||{}).dt||today():today()}
