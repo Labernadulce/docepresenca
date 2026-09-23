@@ -206,6 +206,16 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
   .btn-ic{padding:9px}
   .toast-wrap{bottom:72px;right:12px;left:12px}
   .toast{min-width:0;width:100%}
+  /* Tabelas marcadas com .mobcards viram uma lista de cartões no celular em vez de rolar de lado:
+     cada <td data-label="Coluna"> passa a mostrar "Coluna: valor" empilhado. */
+  table.mobcards{width:100%}
+  table.mobcards thead{display:none}
+  table.mobcards,table.mobcards tbody,table.mobcards tr,table.mobcards td{display:block;width:100%}
+  table.mobcards tr{border:1px solid var(--cream2);border-radius:10px;margin-bottom:10px;padding:4px 12px;background:var(--white)}
+  table.mobcards td{border:none!important;padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right;border-bottom:1px solid var(--cream)!important}
+  table.mobcards td:last-child{border-bottom:none!important;justify-content:flex-end}
+  table.mobcards td:before{content:attr(data-label);font-weight:700;color:var(--txt3);font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;flex-shrink:0}
+  table.mobcards td:not([data-label]):before,table.mobcards td[data-label=""]:before{content:none}
 }
 @media(max-width:400px){
   .stats-grid{grid-template-columns:1fr}
@@ -957,14 +967,14 @@ function renderVendasTable(){
   if(f)rows=rows.filter(v=>v.status===f)
   const el=document.getElementById('vendasTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><svg width="40" height="40" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><h3>Nenhuma venda</h3><p>Registre a primeira venda</p></div>`;return}
-  el.innerHTML=`<table><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Pagamento</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Data</th><th>Cliente</th><th>Itens</th><th>Pagamento</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${rows.map(v=>`<tr>
-      <td>${fmtDate(v.data)}</td>
-      <td><strong>${clienteNome(v.cliId)}</strong></td>
-      <td><span class="bdg" style="background:var(--cream2);color:var(--txt2)">${v.itens.length} ite${v.itens.length>1?'ns':'m'}</span></td>
-      <td><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--txt2)"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>${v.pgto}</span></td>
-      <td><strong style="font-size:15px;font-weight:800;color:var(--ok)">${fmt(v.totalF)}</strong>${v.desc>0?`<br><small style="color:var(--txt3)">desc: ${fmt(v.desc)}</small>`:''}</td>
-      <td>${v.status==='pago'?`<span class="bdg bdg-g" style="cursor:pointer" title="Clique para marcar como Pendente" onclick="toggleVendaStatus('${v.id}')">✓ Pago</span>`:`<span class="bdg bdg-y" style="cursor:pointer" title="Clique para marcar como Pago" onclick="toggleVendaStatus('${v.id}')">⏳ Pendente</span>`}${v.comprovante?`<span class="anexo-clip" title="Comprovante anexado"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`:''}</td>
+      <td data-label="Data">${fmtDate(v.data)}</td>
+      <td data-label="Cliente"><strong>${clienteNome(v.cliId)}</strong></td>
+      <td data-label="Itens"><span class="bdg" style="background:var(--cream2);color:var(--txt2)">${v.itens.length} ite${v.itens.length>1?'ns':'m'}</span></td>
+      <td data-label="Pagamento"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--txt2)"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>${v.pgto}</span></td>
+      <td data-label="Total"><strong style="font-size:15px;font-weight:800;color:var(--ok)">${fmt(v.totalF)}</strong>${v.desc>0?`<br><small style="color:var(--txt3)">desc: ${fmt(v.desc)}</small>`:''}</td>
+      <td data-label="Status">${v.status==='pago'?`<span class="bdg bdg-g" style="cursor:pointer" title="Clique para marcar como Pendente" onclick="toggleVendaStatus('${v.id}')">✓ Pago</span>`:`<span class="bdg bdg-y" style="cursor:pointer" title="Clique para marcar como Pago" onclick="toggleVendaStatus('${v.id}')">⏳ Pendente</span>`}${v.comprovante?`<span class="anexo-clip" title="Comprovante anexado"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`:''}</td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" title="Ver" onclick="verVenda('${v.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" title="Editar" onclick="editVenda('${v.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1223,7 +1233,7 @@ function renderOrcTable(){
   const el=document.getElementById('orcTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum orçamento</h3><p>Crie o primeiro orçamento</p></div>`;return}
   const spCfg={aberto:{l:'🔵 Aberto',c:'#5A8FD0',bg:'#EEF3FF',b:'#B8C8F0'},produzindo:{l:'🟡 Produzindo',c:'#B07030',bg:'#FFF3DC',b:'#F0C878'},produzido:{l:'🟢 Produzido',c:'#2E7D32',bg:'#EFF9F0',b:'#A5D6A7'},cancelado:{l:'🔴 Cancelado',c:'#B71C1C',bg:'#FFF0F0',b:'#FFAAAA'}}
-  el.innerHTML=`<table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Validade</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Produção</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Itens</th><th>Validade</th><th>Pagamento</th><th>Total</th><th>Status</th><th>Produção</th><th></th></tr></thead><tbody>
     ${rows.map(o=>{
       const sp=o.statusProd||'aberto'
       const sc=spCfg[sp]||spCfg.aberto
@@ -1237,17 +1247,17 @@ function renderOrcTable(){
           </select>`
         :`<span style="color:var(--txt3);font-size:12px">—</span>`
       return`<tr>
-      <td style="font-weight:700;color:var(--cara);white-space:nowrap">${orcNumFmt(o)}</td><td>${fmtDate(o.data)}</td><td><strong>${clienteNome(o.cliId)}</strong></td>
-      <td>${Array.isArray(o.opcoes)&&o.opcoes.length>1?`<span class="bdg" style="background:#EEE3F5;color:#7B5EA7">${o.opcoes.length} opções</span>`:`<span class="bdg" style="background:var(--cream2);color:var(--txt2)">${o.itens.length} item(s)</span>`}</td>
-      <td style="font-weight:600">${fmtDate(o.validade)}</td>
-      <td><span style="font-size:12px;color:var(--txt2)">${o.pgto||'<span style="color:var(--txt3)">—</span>'}</span></td>
-      <td><strong style="font-size:15px;font-weight:800;color:var(--cara)">${Array.isArray(o.opcoes)&&o.opcoes.length>1?o.opcoes.map(op=>fmt(op.totalF)).join(' / '):fmt(o.totalF)}</strong></td>
-      <td><select class="orc-st-sel orc-st-${o.status}" onchange="statusOrc('${o.id}',this.value)">
+      <td data-label="Nº" style="font-weight:700;color:var(--cara);white-space:nowrap">${orcNumFmt(o)}</td><td data-label="Data">${fmtDate(o.data)}</td><td data-label="Cliente"><strong>${clienteNome(o.cliId)}</strong></td>
+      <td data-label="Itens">${Array.isArray(o.opcoes)&&o.opcoes.length>1?`<span class="bdg" style="background:#EEE3F5;color:#7B5EA7">${o.opcoes.length} opções</span>`:`<span class="bdg" style="background:var(--cream2);color:var(--txt2)">${o.itens.length} item(s)</span>`}</td>
+      <td data-label="Validade" style="font-weight:600">${fmtDate(o.validade)}</td>
+      <td data-label="Pagamento"><span style="font-size:12px;color:var(--txt2)">${o.pgto||'<span style="color:var(--txt3)">—</span>'}</span></td>
+      <td data-label="Total"><strong style="font-size:15px;font-weight:800;color:var(--cara)">${Array.isArray(o.opcoes)&&o.opcoes.length>1?o.opcoes.map(op=>fmt(op.totalF)).join(' / '):fmt(o.totalF)}</strong></td>
+      <td data-label="Status"><select class="orc-st-sel orc-st-${o.status}" onchange="statusOrc('${o.id}',this.value)">
         <option value="pendente" ${o.status==='pendente'?'selected':''}>Pendente</option>
         <option value="aprovado" ${o.status==='aprovado'?'selected':''}>Aprovado</option>
         <option value="recusado" ${o.status==='recusado'?'selected':''}>Recusado</option>
       </select></td>
-      <td>${prodCol}</td>
+      <td data-label="Produção">${prodCol}</td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" onclick="verOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" onclick="editOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -1796,18 +1806,18 @@ function renderContTable(){
   const el=document.getElementById('contTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum contrato</h3><p>Crie um novo contrato ou gere a partir de um orçamento aprovado</p></div>`;return}
   const stCfg={ativo:{l:'Ativo',c:'#2E7D32',bg:'#EFF9F0'},concluido:{l:'Concluído',c:'#1565C0',bg:'#E3F2FD'},cancelado:{l:'Cancelado',c:'#B71C1C',bg:'#FFF0F0'}}
-  el.innerHTML=`<table><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Evento</th><th>Entrega</th><th>Total</th><th>Entrada</th><th>Status</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Nº</th><th>Data</th><th>Cliente</th><th>Evento</th><th>Entrega</th><th>Total</th><th>Entrada</th><th>Status</th><th></th></tr></thead><tbody>
   ${rows.map(c=>{
     const sc=stCfg[c.status]||stCfg.ativo
     return`<tr>
-    <td style="font-weight:700;color:var(--cara)">${String(c.num||1)}</td>
-    <td>${fmtDate(c.data)}</td>
-    <td><strong>${clienteNome(c.cliId)}</strong>${c.noivos?`<br><span style="font-size:11px;color:var(--txt3)">${c.noivos}</span>`:''}</td>
-    <td>${c.dataEvento?fmtDate(c.dataEvento):'<span style="color:var(--txt3)">—</span>'}</td>
-    <td>${c.dataEntrega?fmtDate(c.dataEntrega)+(c.horaEntrega?' '+c.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
-    <td><strong style="color:var(--cara)">${fmt(c.totalF||0)}</strong>${(c.entrada>0&&(c.totalF||0)>c.entrada)?`<br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','saldo')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.saldoPago?'#E8F7EE':'#FFF3E0'};color:${c.saldoPago?'#1A7A3A':'#B05000'}">${c.parcelas>1?`${(c.parcelasPlano||[]).filter(p=>p.pago).length}/${c.parcelas} parcelas`:(c.saldoPago?'✓ Saldo pago':'⏳ Saldo pendente')}</span>`:''}</td>
-    <td>${c.entrada>0?`<strong style="color:var(--txt)">${fmt(c.entrada)}</strong><br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','entrada')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.entradaPaga?'#E8F7EE':'#FFF3E0'};color:${c.entradaPaga?'#1A7A3A':'#B05000'}">${c.entradaPaga?'✓ Paga':'⏳ Pendente'}</span>`:'<span style="color:var(--txt3)">—</span>'}</td>
-    <td><span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;color:${sc.c};background:${sc.bg}">${sc.l}</span>${c.assinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${c.assinatura.nome}</span>`:''}</td>
+    <td data-label="Nº" style="font-weight:700;color:var(--cara)">${String(c.num||1)}</td>
+    <td data-label="Data">${fmtDate(c.data)}</td>
+    <td data-label="Cliente"><strong>${clienteNome(c.cliId)}</strong>${c.noivos?`<br><span style="font-size:11px;color:var(--txt3)">${c.noivos}</span>`:''}</td>
+    <td data-label="Evento">${c.dataEvento?fmtDate(c.dataEvento):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td data-label="Entrega">${c.dataEntrega?fmtDate(c.dataEntrega)+(c.horaEntrega?' '+c.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td data-label="Total"><strong style="color:var(--cara)">${fmt(c.totalF||0)}</strong>${(c.entrada>0&&(c.totalF||0)>c.entrada)?`<br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','saldo')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.saldoPago?'#E8F7EE':'#FFF3E0'};color:${c.saldoPago?'#1A7A3A':'#B05000'}">${c.parcelas>1?`${(c.parcelasPlano||[]).filter(p=>p.pago).length}/${c.parcelas} parcelas`:(c.saldoPago?'✓ Saldo pago':'⏳ Saldo pendente')}</span>`:''}</td>
+    <td data-label="Entrada">${c.entrada>0?`<strong style="color:var(--txt)">${fmt(c.entrada)}</strong><br><span onclick="${c.parcelas>1?`verParcelasCont('${c.id}')`:`toggleContPago('${c.id}','entrada')`}" style="font-size:9px;padding:2px 7px;border-radius:10px;font-weight:700;cursor:pointer;background:${c.entradaPaga?'#E8F7EE':'#FFF3E0'};color:${c.entradaPaga?'#1A7A3A':'#B05000'}">${c.entradaPaga?'✓ Paga':'⏳ Pendente'}</span>`:'<span style="color:var(--txt3)">—</span>'}</td>
+    <td data-label="Status"><span style="padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;color:${sc.c};background:${sc.bg}">${sc.l}</span>${c.assinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${c.assinatura.nome}</span>`:''}</td>
     <td style="white-space:nowrap">
       <button class="btn-ic" style="margin-right:4px" title="Imprimir" onclick="imprimirCont('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
       ${c.parcelas>1?`<button class="btn-ic" style="margin-right:4px;color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasCont('${c.id}')">📋</button>`:''}
@@ -2150,10 +2160,10 @@ function renderCliTable(){
   if(q)rows=rows.filter(c=>(c.nome+c.email+c.fone).toLowerCase().includes(q.toLowerCase()))
   const el=document.getElementById('cliTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum cliente</h3><p>Cadastre o primeiro cliente</p></div>`;return}
-  el.innerHTML=`<table><thead><tr><th>Nome</th><th>Telefone</th><th>Email</th><th>Cidade</th><th>Desde</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Nome</th><th>Telefone</th><th>Email</th><th>Cidade</th><th>Desde</th><th></th></tr></thead><tbody>
     ${rows.map(c=>`<tr>
-      <td><strong>${c.nome}</strong>${c.obs?`<br><small style="color:var(--txt3)">${c.obs.slice(0,40)}${c.obs.length>40?'...':''}</small>`:''}</td>
-      <td>${c.fone||'-'}</td><td>${c.email||'-'}</td><td>${c.cidade||'-'}</td><td>${fmtDate(c.dt)}</td>
+      <td data-label="Nome"><strong>${c.nome}</strong>${c.obs?`<br><small style="color:var(--txt3)">${c.obs.slice(0,40)}${c.obs.length>40?'...':''}</small>`:''}</td>
+      <td data-label="Telefone">${c.fone||'-'}</td><td data-label="Email">${c.email||'-'}</td><td data-label="Cidade">${c.cidade||'-'}</td><td data-label="Desde">${fmtDate(c.dt)}</td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" onclick="editCli('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         <button class="btn-ic btn-d" onclick="excluirCli('${c.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -3214,14 +3224,14 @@ function renderFinTable(){
   if(f)rows=rows.filter(t=>t.tipo===f)
   const el=document.getElementById('finTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum lançamento</h3></div>`;return}
-  el.innerHTML=`<table><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Pagamento</th><th>Valor</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Pagamento</th><th>Valor</th><th></th></tr></thead><tbody>
     ${rows.map(t=>`<tr>
-      <td>${fmtDate(t.data)}</td>
-      <td>${t.tipo==='entrada'?'<span class="bdg bdg-g">Entrada</span>':'<span class="bdg bdg-r">Saída</span>'}</td>
-      <td><span style="display:inline-block;background:var(--cream2);color:var(--txt2);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px">${t.cat}</span></td>
-      <td style="max-width:200px"><strong style="color:var(--txt);font-size:13px">${t.desc}</strong></td>
-      <td><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--txt2)"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>${t.pgto||'—'}</span></td>
-      <td><strong class="${t.tipo==='entrada'?'fin-amt inc':'fin-amt exp'}">${t.tipo==='entrada'?'+':'-'} ${fmt(t.val)}</strong></td>
+      <td data-label="Data">${fmtDate(t.data)}</td>
+      <td data-label="Tipo">${t.tipo==='entrada'?'<span class="bdg bdg-g">Entrada</span>':'<span class="bdg bdg-r">Saída</span>'}</td>
+      <td data-label="Categoria"><span style="display:inline-block;background:var(--cream2);color:var(--txt2);font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px">${t.cat}</span></td>
+      <td data-label="Descrição" style="max-width:200px"><strong style="color:var(--txt);font-size:13px">${t.desc}</strong></td>
+      <td data-label="Pagamento"><span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--txt2)"><svg width="11" height="11" fill="none" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" stroke-width="2"/><path d="M2 10h20" stroke="currentColor" stroke-width="2"/></svg>${t.pgto||'—'}</span></td>
+      <td data-label="Valor"><strong class="${t.tipo==='entrada'?'fin-amt inc':'fin-amt exp'}">${t.tipo==='entrada'?'+':'-'} ${fmt(t.val)}</strong></td>
       <td><button class="btn-ic btn-d" onclick="excluirTrans('${t.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></td>
     </tr>`).join('')}
   </tbody></table>`
@@ -3385,12 +3395,12 @@ function renderCursosTable(){
   if(q)rows=rows.filter(c=>(c.titulo+' '+(c.categoria||'')).toLowerCase().includes(q.toLowerCase()))
   const el=document.getElementById('cursosTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum curso</h3><p>Cadastre o primeiro curso e adicione PDFs e links</p></div>`;return}
-  el.innerHTML=`<table><thead><tr><th>Título</th><th>Categoria</th><th>Materiais</th><th>Criado em</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Título</th><th>Categoria</th><th>Materiais</th><th>Criado em</th><th></th></tr></thead><tbody>
     ${rows.map(c=>`<tr>
-      <td><strong>${c.titulo}</strong>${c.descricao?`<br><small style="color:var(--txt3)">${c.descricao.slice(0,50)}${c.descricao.length>50?'...':''}</small>`:''}</td>
-      <td>${c.categoria||'-'}</td>
-      <td>${(c.materiais||[]).length?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">${(c.materiais||[]).map(m=>_icTipoMat[m.tipo]||'📎').join(' ')} ${(c.materiais||[]).length}</span>`:'<span style="color:var(--txt3)">-</span>'}</td>
-      <td>${fmtDate(c.dt)}</td>
+      <td data-label="Título"><strong>${c.titulo}</strong>${c.descricao?`<br><small style="color:var(--txt3)">${c.descricao.slice(0,50)}${c.descricao.length>50?'...':''}</small>`:''}</td>
+      <td data-label="Categoria">${c.categoria||'-'}</td>
+      <td data-label="Materiais">${(c.materiais||[]).length?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">${(c.materiais||[]).map(m=>_icTipoMat[m.tipo]||'📎').join(' ')} ${(c.materiais||[]).length}</span>`:'<span style="color:var(--txt3)">-</span>'}</td>
+      <td data-label="Criado em">${fmtDate(c.dt)}</td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" onclick="verCurso('${c.id}')" title="Ver"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" onclick="editCurso('${c.id}')" title="Editar"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -3602,12 +3612,12 @@ function renderDocsTable(){
 
   const el=document.getElementById('docsTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum documento</h3><p>Cadastre o primeiro documento</p></div>`;return}
-  el.innerHTML=`<table><thead><tr><th>Nome</th><th>Categoria</th><th>Arquivo</th><th>Criado em</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>Nome</th><th>Categoria</th><th>Arquivo</th><th>Criado em</th><th></th></tr></thead><tbody>
     ${rows.map(d=>`<tr>
-      <td><strong>${d.nome}</strong>${d.descricao?`<br><small style="color:var(--txt3)">${d.descricao.slice(0,50)}${d.descricao.length>50?'...':''}</small>`:''}</td>
-      <td>${d.categoria?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">${d.categoria}</span>`:'-'}</td>
-      <td>${d.anexoMeta?'📎 arquivo':d.url?'🔗 link':'-'}</td>
-      <td>${fmtDate(d.dt)}</td>
+      <td data-label="Nome"><strong>${d.nome}</strong>${d.descricao?`<br><small style="color:var(--txt3)">${d.descricao.slice(0,50)}${d.descricao.length>50?'...':''}</small>`:''}</td>
+      <td data-label="Categoria">${d.categoria?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">${d.categoria}</span>`:'-'}</td>
+      <td data-label="Arquivo">${d.anexoMeta?'📎 arquivo':d.url?'🔗 link':'-'}</td>
+      <td data-label="Criado em">${fmtDate(d.dt)}</td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" onclick="abrirDocumento('${d.id}')" title="Abrir"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" onclick="editDoc('${d.id}')" title="Editar"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -3781,17 +3791,17 @@ function renderOSTable(){
   const el=document.getElementById('osTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><svg width="40" height="40" fill="none" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg><h3>Nenhuma OS</h3><p>Aprove um orçamento para gerar uma OS automaticamente</p></div>`;return}
   const orcs=DB.get(S.ORCAMENTOS)
-  el.innerHTML=`<table><thead><tr><th>OS #</th><th>Cliente</th><th>Orç. Origem</th><th>Criada em</th><th>Prazo</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>
+  el.innerHTML=`<table class="mobcards"><thead><tr><th>OS #</th><th>Cliente</th><th>Orç. Origem</th><th>Criada em</th><th>Prazo</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>
     ${rows.map(os=>{
       const orc=orcs.find(x=>x.id===os.orcId)
       return`<tr>
-      <td><strong>#${String(os.num).padStart(3,'0')}</strong></td>
-      <td><strong>${clienteNome(os.cliId)}</strong></td>
-      <td><span class="bdg bdg-b">${orc?'Orç Nº '+orcNumFmt(orc):'Manual'}</span></td>
-      <td>${fmtDate(os.data)}</td>
-      <td>${os.prazo?`<span style="color:${os.prazo<today()&&os.status!=='concluida'?'var(--bad)':'inherit'}">${fmtDate(os.prazo)}</span>`:'—'}</td>
-      <td><strong>${fmt(os.total)}</strong></td>
-      <td><span class="bdg ${bdgOS[os.status]||'bdg-gr'}">${lblOS[os.status]||os.status}</span></td>
+      <td data-label="OS #"><strong>#${String(os.num).padStart(3,'0')}</strong></td>
+      <td data-label="Cliente"><strong>${clienteNome(os.cliId)}</strong></td>
+      <td data-label="Orç. Origem"><span class="bdg bdg-b">${orc?'Orç Nº '+orcNumFmt(orc):'Manual'}</span></td>
+      <td data-label="Criada em">${fmtDate(os.data)}</td>
+      <td data-label="Prazo">${os.prazo?`<span style="color:${os.prazo<today()&&os.status!=='concluida'?'var(--bad)':'inherit'}">${fmtDate(os.prazo)}</span>`:'—'}</td>
+      <td data-label="Total"><strong>${fmt(os.total)}</strong></td>
+      <td data-label="Status"><span class="bdg ${bdgOS[os.status]||'bdg-gr'}">${lblOS[os.status]||os.status}</span></td>
       <td style="white-space:nowrap">
         <button class="btn-ic" style="margin-right:4px" onclick="verOS('${os.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button>
         <button class="btn-ic" style="margin-right:4px" onclick="imprimirOS('${os.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
@@ -5476,20 +5486,20 @@ function renderRomTable(){
   const el=document.getElementById('romTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum orçamento</h3><p>Os orçamentos aparecerão aqui</p></div>`;return}
   const bdg={pendente:'bdg-y',aprovado:'bdg-g',recusado:'bdg-r'}
-  el.innerHTML=`<table><thead><tr>
+  el.innerHTML=`<table class="mobcards"><thead><tr>
     <th>Nº</th><th>Data</th><th>Cliente</th><th>Entrega</th><th>Modalidade</th><th>Status</th><th></th>
   </tr></thead><tbody>
   ${rows.map(o=>`<tr style="cursor:pointer" onclick="verRomaneioItens('${o.id}')">
-    <td style="font-weight:800;color:var(--cara)">${orcNumFmt(o)}</td>
-    <td>${fmtDate(o.data)}</td>
-    <td><strong>${clienteNome(o.cliId)}</strong>${o.romAssinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${o.romAssinatura.nome}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª)':''}</span>`:''}</td>
-    <td>${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
-    <td onclick="event.stopPropagation();editarModalidadeRom('${o.id}')" style="cursor:pointer" title="Clique para editar modalidade/endereço">
+    <td data-label="Nº" style="font-weight:800;color:var(--cara)">${orcNumFmt(o)}</td>
+    <td data-label="Data">${fmtDate(o.data)}</td>
+    <td data-label="Cliente"><strong>${clienteNome(o.cliId)}</strong>${o.romAssinatura?`<br><span style="font-size:10px;color:#2E7D32;font-weight:600">✍️ ${o.romAssinatura.nome}${o.romAssinatura.retiradas&&o.romAssinatura.retiradas>1?' ('+o.romAssinatura.retiradas+'ª)':''}</span>`:''}</td>
+    <td data-label="Entrega">${o.dataEntrega?fmtDate(o.dataEntrega)+(o.horaEntrega?' às '+o.horaEntrega:''):'<span style="color:var(--txt3)">—</span>'}</td>
+    <td data-label="Modalidade" onclick="event.stopPropagation();editarModalidadeRom('${o.id}')" style="cursor:pointer" title="Clique para editar modalidade/endereço">
       ${o.entrega==='entrega'?`<span style="color:#1565C0;font-weight:600">🚚 Entrega${o.endEntrega?`<br><small style="font-weight:400;color:var(--txt3)">${o.endEntrega}</small>`:''}</span>`:`<span style="color:#2E7D32;font-weight:600">🏪 Retira</span>`}
       ${o.entrega2?`<br><span style="font-size:11px;color:${o.entrega2==='entrega'?'#1565C0':'#2E7D32'};font-weight:600">${o.entrega2==='entrega'?'🚚':'🏪'} Opção 2${o.entrega2==='entrega'&&o.endEntrega2?': '+o.endEntrega2:''}</span>`:''}
       <svg width="10" height="10" fill="none" viewBox="0 0 24 24" style="margin-left:4px;color:var(--txt3)"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     </td>
-    <td><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
+    <td data-label="Status"><span class="bdg ${bdg[o.status]||'bdg-gr'}">${o.status.charAt(0).toUpperCase()+o.status.slice(1)}</span></td>
     <td style="white-space:nowrap" onclick="event.stopPropagation()">
       <button class="btn-ic" style="color:#25D366" title="Enviar Link" onclick="gerarLinkRomaneio('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button class="btn-ic" style="margin-left:4px" title="Editar Romaneio" onclick="editOrc('${o.id}',true)"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -7617,11 +7627,11 @@ function relFinHTML(de,ate){
     <div class="stat ${ent-sai>=0?'g':'r'}"><div class="stat-lbl">Resultado</div><div class="stat-val" style="color:${ent-sai>=0?'var(--ok)':'var(--bad)'}">${fmt(ent-sai)}</div></div>
   </div>
   <div class="card"><div class="card-title">Por Categoria</div>
-  <div class="tc"><table><thead><tr><th>Categoria</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr></thead><tbody>
+  <div class="tc"><table class="mobcards"><thead><tr><th>Categoria</th><th>Entradas</th><th>Saídas</th><th>Saldo</th></tr></thead><tbody>
     ${Object.entries(cats).sort((a,b)=>b[1].e-a[1].e).map(([cat,v])=>`<tr>
-      <td>${cat}</td><td style="color:var(--ok)">${v.e>0?fmt(v.e):'—'}</td>
-      <td style="color:var(--bad)">${v.s>0?fmt(v.s):'—'}</td>
-      <td style="font-weight:700;color:${v.e-v.s>=0?'var(--ok)':'var(--bad)'}">${fmt(v.e-v.s)}</td>
+      <td data-label="Categoria">${cat}</td><td data-label="Entradas" style="color:var(--ok)">${v.e>0?fmt(v.e):'—'}</td>
+      <td data-label="Saídas" style="color:var(--bad)">${v.s>0?fmt(v.s):'—'}</td>
+      <td data-label="Saldo" style="font-weight:700;color:${v.e-v.s>=0?'var(--ok)':'var(--bad)'}">${fmt(v.e-v.s)}</td>
     </tr>`).join('')}
   </tbody></table></div></div>`
 }
@@ -7706,9 +7716,9 @@ function relProdHTML(de,ate){
   return`
   <div class="card"><div class="card-title">Produtos mais Vendidos</div>
   ${!rows.length?`<div class="empty"><h3>Sem dados no período</h3></div>`:`
-  <div class="tc"><table><thead><tr><th>Produto</th><th>Qtd Vendida</th><th>Faturamento</th><th>% do Total</th></tr></thead><tbody>
-    ${(()=>{const tot=rows.reduce((a,r)=>a+r[1].total,0);return rows.map(([nome,d])=>`<tr><td><strong>${nome}</strong></td><td>${d.qtd}</td><td>${fmt(d.total)}</td>
-    <td><div style="display:flex;align-items:center;gap:8px"><div class="pbar-wrap" style="width:80px"><div class="pbar-fill" style="width:${Math.round((d.total/tot)*100)}%"></div></div><span style="font-size:12px;color:var(--txt3)">${Math.round((d.total/tot)*100)}%</span></div></td>
+  <div class="tc"><table class="mobcards"><thead><tr><th>Produto</th><th>Qtd Vendida</th><th>Faturamento</th><th>% do Total</th></tr></thead><tbody>
+    ${(()=>{const tot=rows.reduce((a,r)=>a+r[1].total,0);return rows.map(([nome,d])=>`<tr><td data-label="Produto"><strong>${nome}</strong></td><td data-label="Qtd Vendida">${d.qtd}</td><td data-label="Faturamento">${fmt(d.total)}</td>
+    <td data-label="% do Total"><div style="display:flex;align-items:center;gap:8px"><div class="pbar-wrap" style="width:80px"><div class="pbar-fill" style="width:${Math.round((d.total/tot)*100)}%"></div></div><span style="font-size:12px;color:var(--txt3)">${Math.round((d.total/tot)*100)}%</span></div></td>
     </tr>`)})().join('')}
   </tbody></table></div>`}</div>`
 }
@@ -7720,8 +7730,8 @@ function relCliHTML(de,ate){
   return`
   <div class="card"><div class="card-title">Clientes por Faturamento</div>
   ${!rows.length?`<div class="empty"><h3>Sem dados no período</h3></div>`:`
-  <div class="tc"><table><thead><tr><th>Cliente</th><th>Nº Pedidos</th><th>Total Gasto</th><th>Ticket Médio</th></tr></thead><tbody>
-    ${rows.map(([cliId,d])=>`<tr><td><strong>${clienteNome(cliId)}</strong></td><td>${d.n}</td><td>${fmt(d.total)}</td><td>${fmt(d.total/d.n)}</td></tr>`).join('')}
+  <div class="tc"><table class="mobcards"><thead><tr><th>Cliente</th><th>Nº Pedidos</th><th>Total Gasto</th><th>Ticket Médio</th></tr></thead><tbody>
+    ${rows.map(([cliId,d])=>`<tr><td data-label="Cliente"><strong>${clienteNome(cliId)}</strong></td><td data-label="Nº Pedidos">${d.n}</td><td data-label="Total Gasto">${fmt(d.total)}</td><td data-label="Ticket Médio">${fmt(d.total/d.n)}</td></tr>`).join('')}
   </tbody></table></div>`}</div>`
 }
 function imprimirRelatorio(){
