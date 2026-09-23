@@ -7498,8 +7498,16 @@ async function _fbInit(){
     // Listener unificado: assinaturas de contratos e retiradas de romaneios (prefixo 'rom' sem underscore)
     let _sigCarregado=false
     if(window.__TENANT_SLUG__==='laberna-dulce')_orgCol('assinaturas').onSnapshot(snap=>{
+      // _orgCol('assinaturas').onSnapshot passa direto pra colecao crua (todas as empresas, sem prefixo
+      // tirado) - antes do multi-empresa, doc.id era o id puro do contrato/romaneio e batia direto com
+      // S.CONTRATOS/S.ORCAMENTOS local. Agora doc.id vem como "laberna-dulce__{id real}" - sem tirar esse
+      // prefixo antes de comparar, a assinatura NUNCA batia com nenhum contrato assinado depois da
+      // migracao (contratos antigos, assinados antes, ainda tinham o doc sem prefixo e continuavam ok).
+      const _pfxSig=window.__TENANT_SLUG__+'__'
       snap.docChanges().forEach(change=>{
-        const docId=change.doc.id
+        const _rawId=change.doc.id
+        if(!_rawId.startsWith(_pfxSig))return
+        const docId=_rawId.slice(_pfxSig.length)
         const sig=change.doc.data()
         if(docId.startsWith('romci')&&!docId.startsWith('romcancel'))return
         if(docId.startsWith('romcancel')){
@@ -7541,13 +7549,14 @@ async function _fbInit(){
         }
       })
       if(!_sigCarregado){
+        // Mesmo tiro-o-prefixo-da-empresa daqui pra baixo (carga inicial, roda só uma vez no load).
+        const _docsDaEmpresa=snap.docs.filter(d=>d.id.startsWith(_pfxSig)).map(d=>({id:d.id.slice(_pfxSig.length),data:d.data()}))
         // Set de IDs de docs de cancel (para lookup O(1) por versão)
-        const cancelSet=new Set(snap.docs.filter(d=>d.id.startsWith('romcancel')).map(d=>d.id))
-        snap.docs.forEach(doc=>{
-          const docId=doc.id
+        const cancelSet=new Set(_docsDaEmpresa.filter(d=>d.id.startsWith('romcancel')).map(d=>d.id))
+        _docsDaEmpresa.forEach(({id:docId,data:sigData})=>{
           if(docId.startsWith('romcancel'))return
           if(docId.startsWith('romci'))return
-          const sig=doc.data()
+          const sig=sigData
           if(sig.retiradas||sig.retirada){
             const retirada=sig.retirada||(sig.retiradas||[]).slice(-1)[0]
             if(!retirada)return
