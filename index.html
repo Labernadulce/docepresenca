@@ -634,12 +634,64 @@ function _anexoInner(a){
     <span style="font-size:11px;color:var(--txt3)">JPG, PNG ou PDF — máx. 2 MB</span>
   </div>`
 }
-function anexoWidget(existing, lbl){
+function anexoWidget(existing, lbl, buscavel){
   lbl=lbl||'Anexar Arquivo'
   return`<div class="fg"><label>${lbl}</label>
     <input type="file" id="anexoInput" accept="image/*,.pdf" style="display:none" onchange="handleAnexo(this)">
     <div id="anexoBox" class="anexo-box">${_anexoInner(existing)}</div>
+    ${buscavel?`<div style="margin-top:8px">
+      <button type="button" class="btn btn-s btn-sm" onclick="buscarFotosProduto()">
+        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" style="vertical-align:-2px;margin-right:3px"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Buscar foto na internet
+      </button>
+      <div id="fotoBuscaResults" style="margin-top:8px"></div>
+    </div>`:''}
   </div>`
+}
+// Busca fotos de exemplo por nome (Wikimedia Commons - não exige chave de API) pra evitar o usuário
+// ter que sair procurando/baixando foto na internet e depois subir manualmente pra cada produto/ingrediente.
+let _fotoBuscaResults=[]
+async function buscarFotosProduto(){
+  const nomeEl=document.getElementById('pNome')||document.getElementById('rNome')
+  const nome=(nomeEl||{}).value||''
+  const marca=(document.getElementById('pMarca')||{}).value||''
+  const q=(nome+' '+marca).trim()
+  if(!q){toast('Digite o nome do item primeiro','err');return}
+  const box=document.getElementById('fotoBuscaResults');if(!box)return
+  box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Buscando fotos...</div>'
+  try{
+    const url=`https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent('filetype:bitmap '+q)}&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=300&format=json&origin=*`
+    const res=await fetch(url)
+    const data=await res.json()
+    const pages=data&&data.query&&data.query.pages?Object.values(data.query.pages):[]
+    _fotoBuscaResults=pages.filter(p=>p.imageinfo&&p.imageinfo[0]&&(p.imageinfo[0].thumburl||p.imageinfo[0].url))
+      .map(p=>({src:p.imageinfo[0].thumburl||p.imageinfo[0].url,titulo:(p.title||'').replace(/^File:/,'')}))
+    if(!_fotoBuscaResults.length){
+      box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Nenhuma foto encontrada pra "'+q+'". Tente outro nome ou envie um arquivo.</div>'
+      return
+    }
+    box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px">
+      ${_fotoBuscaResults.map((r,i)=>`<img src="${r.src}" title="${r.titulo.replace(/"/g,'')}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1.5px solid var(--cream2);cursor:pointer" onclick="selecionarFotoBusca(${i})">`).join('')}
+    </div>
+    <div style="font-size:10px;color:var(--txt3);margin-top:5px">Fotos de banco de imagens (Wikimedia Commons) — clique numa foto pra usar</div>`
+  }catch(err){console.warn('busca de fotos:',err);box.innerHTML='<div style="font-size:12px;color:var(--bad)">Erro ao buscar fotos. Tente novamente.</div>'}
+}
+async function selecionarFotoBusca(i){
+  const r=_fotoBuscaResults[i];if(!r)return
+  const box=document.getElementById('fotoBuscaResults')
+  try{
+    const res=await fetch(r.src)
+    const blob=await res.blob()
+    const reader=new FileReader()
+    reader.onload=e=>{
+      tempAnexo={name:(r.titulo||'foto')+'.jpg',type:blob.type||'image/jpeg',data:e.target.result}
+      const abox=document.getElementById('anexoBox')
+      if(abox)abox.innerHTML=_anexoInner(tempAnexo)
+      if(box)box.innerHTML=''
+      toast('Foto selecionada!','ok')
+    }
+    reader.readAsDataURL(blob)
+  }catch(err){console.warn('selecionar foto busca:',err);toast('Erro ao carregar a foto','err')}
 }
 function handleAnexo(input){
   const file=input.files[0];if(!file)return
@@ -1298,6 +1350,7 @@ async function verAssinaturaOrc(id){
       <img src="${d.assinaturaImg}" style="max-width:280px;height:80px;object-fit:contain;background:#fff;border:1.5px solid var(--cream2);border-radius:8px;display:block;margin:0 auto">`
   }catch(err){console.error(err);toast('Erro ao buscar assinatura.','err');closeModal()}
 }
+let _pendentesAprovacaoOrc=[]
 async function verificarAprovacoesOrc(){
   if(!_fdb){toast('Firebase indisponível no momento.','err');return}
   toast('Verificando aprovações...','ok')
@@ -1317,6 +1370,7 @@ async function verificarAprovacoesOrc(){
       if(local&&local.status!=='aprovado')pendentes.push({id:localId,local,d})
     })
     if(!pendentes.length){toast('Nenhuma aprovação nova no momento.','ok');return}
+    _pendentesAprovacaoOrc=pendentes
     openModal('🔔 Aprovações Recebidas',`
       <div style="display:flex;flex-direction:column;gap:10px">
         ${pendentes.map(p=>`<div style="padding:12px 14px;background:var(--cream);border-radius:8px;border:1.5px solid var(--cream2)">
@@ -1332,9 +1386,17 @@ async function verificarAprovacoesOrc(){
 function aplicarAprovacaoOrc(id,opcaoEscolhida){
   // Guarda qual opção de pacote o cliente escolheu na assinatura, pra Gerar Venda/Gerar Contrato
   // já virem pré-selecionados com a opção certa em vez da Opção 1 por padrão.
-  if(opcaoEscolhida!=null){
+  // Guarda também a assinatura digital em si (imagem+nome+data), senão ela só existia no Firestore
+  // e sumia da tela de Imprimir/Ver (que leem o registro local, não fazem fetch toda hora).
+  const pend=_pendentesAprovacaoOrc.find(p=>p.id===id)
+  const sig=pend&&pend.d
+  if(opcaoEscolhida!=null||sig){
     const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id)
-    if(i>=0){orcs[i].opcaoAprovada=opcaoEscolhida;DB.set(S.ORCAMENTOS,orcs)}
+    if(i>=0){
+      if(opcaoEscolhida!=null)orcs[i].opcaoAprovada=opcaoEscolhida
+      if(sig&&sig.assinaturaImg)orcs[i].assinatura={img:sig.assinaturaImg,nome:sig.aprovadoPor,em:sig.aprovadoEm,opcaoNome:sig.opcaoNome}
+      DB.set(S.ORCAMENTOS,orcs)
+    }
   }
   statusOrc(id,'aprovado')
   if(_fdb)_orgCol('contratos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
@@ -2227,7 +2289,9 @@ function estHTML(){
     <div class="tab active" onclick="setEstTab('produto',this)">Produtos Finais (${ps.length})</div>
     <div class="tab" onclick="setEstTab('ingrediente',this)">Matérias-Primas (${is.length})</div>
   </div>
-  <div class="card"><div class="tbar"><div class="srch"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="srchEst" placeholder="Buscar produto..." oninput="renderEstTable()"></div></div>
+  <div class="card"><div class="tbar" style="gap:10px"><div class="srch" style="flex:1"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="srchEst" placeholder="Buscar produto..." oninput="renderEstTable()"></div>
+    <select id="filtMarcaEst" onchange="renderEstTable()" style="padding:8px 10px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;font-family:inherit;color:var(--txt);background:var(--white);min-width:150px"><option value="">Todas marcas</option></select>
+    </div>
     <div class="tc" id="estTable"></div></div>`
 }
 function bindEst(){renderEstTable()}
@@ -2239,7 +2303,16 @@ function setEstTab(tab,el){
 }
 function renderEstTable(){
   const q=(document.getElementById('srchEst')||{}).value||''
+  const marcaFiltro=(document.getElementById('filtMarcaEst')||{}).value||''
   let rows=DB.get(S.PRODUTOS).filter(x=>x.tipo===estoqueTab)
+  // repopula as opções de marca (preserva a selecionada) só com as marcas do tipo atual (produto/ingrediente)
+  const marcaSel=document.getElementById('filtMarcaEst')
+  if(marcaSel){
+    const marcas=[...new Set(rows.map(p=>p.marca).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt'))
+    const atualM=marcaSel.value
+    marcaSel.innerHTML=`<option value="">Todas marcas</option>${marcas.map(m=>`<option value="${m}" ${m===atualM?'selected':''}>${m}</option>`).join('')}`
+  }
+  if(marcaFiltro)rows=rows.filter(p=>p.marca===marcaFiltro)
   if(q)rows=rows.filter(p=>p.nome.toLowerCase().includes(q.toLowerCase()))
   const el=document.getElementById('estTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum item</h3><p>Cadastre o primeiro ${estoqueTab==='produto'?'produto':'ingrediente'}</p></div>`;return}
@@ -2252,7 +2325,7 @@ function renderEstTable(){
       const custoLeg=temCusto?fmtCustoLeg(p.custo,p.un):'—'
       return`<tr>
         <td><div style="display:flex;align-items:center;gap:8px">${p.foto&&p.foto.data?`<img src="${p.foto.data}" onclick="verAnexo(${JSON.stringify(p.foto).replace(/"/g,'&quot;')})" style="width:30px;height:30px;border-radius:6px;object-fit:cover;cursor:pointer;flex-shrink:0" title="Ver foto">`:''}<strong>${p.nome}</strong></div></td>
-        <td style="color:var(--txt3)">${p.cat||'-'}</td>
+        <td style="color:var(--txt3)">${p.cat||'-'}${p.marca?`<br><span style="font-size:10px;background:var(--cream2);color:var(--txt2);border-radius:20px;padding:1px 8px;font-weight:700">${p.marca}</span>`:''}</td>
         <td>
           <div style="font-weight:700;font-size:14px;color:var(--choc)">${p.estoque} ${p.un}</div>
           ${p.un==='g'&&p.estoque>=1000?`<div style="font-size:10px;color:var(--txt3)">${(p.estoque/1000).toFixed(3).replace(/\.?0+$/,'')} kg</div>`:
@@ -2326,7 +2399,7 @@ function prodForm(p){
   const stl='padding:7px 8px;border:1.5px solid var(--cream2);border-radius:7px;font-size:13px;font-family:inherit;outline:none;width:100%;box-sizing:border-box;color:var(--txt);background:var(--white)'
   const custoAtual=(p.custo&&p.un)?`<span style="color:var(--ok);font-weight:600">✓ Custo atual: ${fmtCustoLeg(p.custo,p.un)}</span>`:'← Preencha: quanto pagou e em que quantidade'
   return`
-  ${anexoWidget(p.foto,'Foto do Produto')}
+  ${anexoWidget(p.foto,'Foto do Produto',true)}
   <div class="frow">
     <div class="fg"><label>Nome *</label><input id="pNome" value="${p.nome||''}" placeholder="Nome do item"></div>
     <div class="fg"><label>Tipo</label><select id="pTipo" onchange="togglePrecoCampo()">
@@ -2336,9 +2409,13 @@ function prodForm(p){
   </div>
   <div class="frow">
     <div class="fg"><label>Categoria</label><input id="pCat" value="${p.cat||''}" placeholder="Bolos, Cupcakes..."></div>
+    <div class="fg"><label>Marca</label><input id="pMarca" list="pMarcaList" value="${p.marca||''}" placeholder="Ex: Dona Benta"><datalist id="pMarcaList">${[...new Set(DB.get(S.PRODUTOS).map(x=>x.marca).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt')).map(m=>`<option value="${m}">`).join('')}</datalist></div>
+  </div>
+  <div class="frow">
     <div class="fg"><label>Unidade de estoque</label>
       <select id="pUn" onchange="calcProdCusto()">${['un','kg','g','ml','L','cx','pct'].map(u=>`<option ${p.un===u?'selected':''}>${u}</option>`).join('')}</select>
     </div>
+    <div class="fg"></div>
   </div>
   <div class="frow" id="campoPreco" style="${ing?'display:none':''}">
     <div class="fg"><label>Preço Venda (R$)</label><input type="number" id="pPreco" value="${p.preco||0}" min="0" step="0.01"></div>
@@ -2474,6 +2551,7 @@ function salvarProd(){
   const p={
     id:editId||genId(),nome:nome.trim(),tipo,
     cat:(document.getElementById('pCat')||{}).value,
+    marca:(document.getElementById('pMarca')||{}).value,
     un,
     preco:parseFloat((document.getElementById('pPreco')||{}).value)||0,
     custo,
@@ -4065,7 +4143,7 @@ function receitaForm(r){
   </div>
   <div class="fg"><label>Dicas e Observações</label><textarea id="rDicas" placeholder="Dicas, substituições, variações...">${r.dicas||''}</textarea></div>
   <div class="fg"><label>Link de Vídeo (YouTube, Instagram, etc.)</label><input id="rVideo" type="url" value="${r.video||''}" placeholder="https://www.youtube.com/watch?v=..."></div>
-  ${anexoWidget(r.foto||null,'Foto da Receita')}
+  ${anexoWidget(r.foto||null,'Foto da Receita',true)}
   `
 }
 function salvarPrecoVendaProduto(preco){
@@ -5453,10 +5531,17 @@ function cliBlock(cli){
   if(cli.obs)rows.push(`<tr><th>Observação:</th><td colspan="3">${cli.obs}</td></tr>`)
   return`<div class="section" style="margin-bottom:16px"><div class="cli-table-title">Cliente</div><table class="cli-table">${rows.join('')}</table></div>`
 }
-function docFoot(obs,assinatura){
+function docFoot(obs,assinatura,sigData){
   const e=getEmpresa()
+  const temSigDigital=sigData&&sigData.img
   return`${obs?`<div style="margin:18px 0;padding:12px;border:1px solid #DDD9D2;border-radius:4px;font-size:13px;color:#52493E"><strong style="display:block;margin-bottom:6px;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#8A7E6E">Observações</strong>${obs}</div>`:''}
-  ${assinatura?`<div class="sign"><div class="sign-line">Assinatura do Cliente</div><div class="sign-line">Assinatura / Carimbo</div></div>`:''}
+  ${temSigDigital?`<div style="margin:18px 0;padding:14px 16px;border:1px solid #DDD9D2;border-radius:6px;text-align:center">
+    <div style="font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:#8A7E6E;font-weight:700;margin-bottom:8px">✅ Assinado Digitalmente</div>
+    <img src="${sigData.img}" style="max-width:260px;height:75px;object-fit:contain;background:#fff;border:1px solid #EDE5DA;border-radius:6px;display:block;margin:0 auto 8px">
+    <div style="font-size:13px;font-weight:700;color:#3D3028">${sigData.nome||'—'}</div>
+    ${sigData.opcaoNome?`<div style="font-size:11px;color:#7B5EA7;font-weight:700;margin-top:2px">Pacote escolhido: ${sigData.opcaoNome}</div>`:''}
+    ${sigData.em?`<div style="font-size:10px;color:#9A8E82;margin-top:2px">em ${new Date(sigData.em).toLocaleString('pt-BR')}</div>`:''}
+  </div>`:(assinatura?`<div class="sign"><div class="sign-line">Assinatura do Cliente</div><div class="sign-line">Assinatura / Carimbo</div></div>`:'')}
   <div class="footer"><span>${e.obs||''}</span><span>${e.site||''} ${e.fone||''}</span></div>
   </div></body></html>`
 }
@@ -6405,7 +6490,7 @@ async function confirmarRomaneioRecebimento(){
   if(sec)sec.style.display='none'
 }
 
-function imprimirOrc(id){
+async function imprimirOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
   const prods=DB.get(S.PRODUTOS)
@@ -6451,6 +6536,23 @@ function imprimirOrc(id){
       ${o.desc>0?`<div class="disc-row"><span>Desconto</span><span>- ${fmt(o.desc)}</span></div>`:''}
       <div class="total-row"><span>TOTAL</span><span>${fmt(o.totalF)}</span></div>`
   const w=window.open('','_blank','width=900,height=700')
+  if(w)w.document.write('<html><body style="margin:0;background:#F4EFE8;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;font-size:14px;color:#8A7E6E">Carregando...</body></html>')
+  // se o orçamento já foi aprovado mas a assinatura digital ainda não foi sincronizada pro registro local
+  // (aprovação aplicada antes desse campo existir, ou chegou só no listener sem essa parte), busca ao vivo
+  // no Firestore antes de imprimir - e já aproveita pra gravar local, assim não precisa buscar de novo.
+  let sigData=o.assinatura
+  if(!sigData&&o.status==='aprovado'&&_fdb){
+    try{
+      const snap=await _orgCol('contratos_pub').doc(id).get()
+      if(snap.exists&&snap.data().assinaturaImg){
+        const d=snap.data()
+        sigData={img:d.assinaturaImg,nome:d.aprovadoPor,em:d.aprovadoEm,opcaoNome:d.opcaoNome}
+        const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id)
+        if(i>=0){orcs[i].assinatura=sigData;DB.set(S.ORCAMENTOS,orcs)}
+      }
+    }catch(err){console.warn('Erro ao buscar assinatura p/ impressão:',err)}
+  }
+  if(!w)return
   w.document.write(docHead('ORÇAMENTO')+
     `<div style="display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0 14px;border-bottom:2px solid #C4B09A;margin-bottom:16px">
       <div>
@@ -6487,7 +6589,7 @@ function imprimirOrc(id){
     </div>`:''}
     ${cliBlock(cli)}
     ${prodBlockHtml}`
-    +docFoot(o.obs,true))
+    +docFoot(o.obs,true,sigData))
   w.document.close();setTimeout(()=>w.print(),400)
 }
 
@@ -7998,6 +8100,7 @@ async function _fbInit(){
         const idx=orcs.findIndex(o=>o.id===localId)
         if(idx<0||orcs[idx].status==='aprovado')return
         if(d.opcaoEscolhida!=null)orcs[idx].opcaoAprovada=d.opcaoEscolhida
+        if(d.assinaturaImg)orcs[idx].assinatura={img:d.assinaturaImg,nome:d.aprovadoPor,em:d.aprovadoEm,opcaoNome:d.opcaoNome}
         orcs[idx].status='aprovado'
         DB.set(S.ORCAMENTOS,orcs)
         if(avisar)toast(`✅ Orçamento Nº ${orcNumFmt(orcs[idx])} aprovado por ${d.aprovadoPor||'cliente'}!`,'ok')
