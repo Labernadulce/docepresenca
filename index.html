@@ -207,12 +207,15 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
   .toast-wrap{bottom:72px;right:12px;left:12px}
   .toast{min-width:0;width:100%}
   /* Tabelas marcadas com .mobcards viram uma lista de cartões no celular em vez de rolar de lado:
-     cada <td data-label="Coluna"> passa a mostrar "Coluna: valor" empilhado. */
-  table.mobcards{width:100%}
+     cada <td data-label="Coluna"> passa a mostrar "Coluna: valor" empilhado. Fundo do .tc fica um
+     tom mais escuro que o cartão branco de cada linha, pra elas não se misturarem visualmente. */
+  .tc:has(table.mobcards){background:var(--cream2);padding:10px;border-radius:var(--r)}
+  table.mobcards{width:100%;border-spacing:0}
   table.mobcards thead{display:none}
   table.mobcards,table.mobcards tbody,table.mobcards tr,table.mobcards td{display:block;width:100%}
-  table.mobcards tr{border:1px solid var(--cream2);border-radius:10px;margin-bottom:10px;padding:4px 12px;background:var(--white)}
-  table.mobcards td{border:none!important;padding:8px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right;border-bottom:1px solid var(--cream)!important}
+  table.mobcards tr{border:1px solid var(--cream2);border-left:4px solid var(--cara);border-radius:12px;margin-bottom:12px;padding:4px 14px;background:var(--white);box-shadow:0 3px 10px rgba(74,44,30,.13)}
+  table.mobcards tr:last-child{margin-bottom:0}
+  table.mobcards td{border:none!important;padding:9px 0;display:flex;justify-content:space-between;align-items:center;gap:12px;text-align:right;border-bottom:1px solid var(--cream)!important}
   table.mobcards td:last-child{border-bottom:none!important;justify-content:flex-end}
   table.mobcards td:before{content:attr(data-label);font-weight:700;color:var(--txt3);font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:left;flex-shrink:0}
   table.mobcards td:not([data-label]):before,table.mobcards td[data-label=""]:before{content:none}
