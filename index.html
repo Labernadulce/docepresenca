@@ -3405,24 +3405,28 @@ function cursoForm(c){
     <div id="cuMatAnexoRow" style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <button type="button" class="btn btn-s btn-sm" onclick="document.getElementById('cuMatFile').click()">📎 Anexar PDF</button>
       <input type="file" id="cuMatFile" accept=".pdf,application/pdf" style="display:none" onchange="handleCuMatFile(this)">
-      <span id="cuMatFileInfo" style="font-size:11px;color:var(--txt3)">máx. 2 MB</span>
+      <span id="cuMatFileInfo" style="font-size:11px;color:var(--txt3)">máx. 8 MB — arquivo fica guardado no próprio sistema, dividido em partes</span>
     </div>
     <div id="cuMateriaisList"></div>
   </div>`
 }
 let _cuMatAnexo=null
+const _CU_CHUNK_SIZE=700000 // ~700KB por pedaço, bem abaixo do limite de ~1MB por documento do Firestore
 function toggleCuMatAnexo(){
   const row=document.getElementById('cuMatAnexoRow')
   if(row)row.style.display=v('cuMatTipo')==='pdf'?'flex':'none'
 }
 function handleCuMatFile(input){
   const file=input.files[0];if(!file)return
-  if(file.size>2*1024*1024){toast('Arquivo muito grande (máx. 2 MB)','err');input.value='';return}
+  if(file.size>8*1024*1024){toast('Arquivo muito grande (máx. 8 MB)','err');input.value='';return}
   const reader=new FileReader()
   reader.onload=e=>{
-    _cuMatAnexo={name:file.name,type:file.type||'application/pdf',data:e.target.result}
+    const data=e.target.result
+    const chunks=[]
+    for(let i=0;i<data.length;i+=_CU_CHUNK_SIZE)chunks.push(data.slice(i,i+_CU_CHUNK_SIZE))
+    _cuMatAnexo={name:file.name,type:file.type||'application/pdf',chunks}
     const info=document.getElementById('cuMatFileInfo')
-    if(info)info.innerHTML=`✓ ${file.name} <a href="#" onclick="event.preventDefault();_cuMatAnexo=null;document.getElementById('cuMatFile').value='';this.parentElement.textContent='máx. 2 MB'" style="color:var(--bad);margin-left:6px;font-weight:700">remover</a>`
+    if(info)info.innerHTML=`✓ ${file.name} <a href="#" onclick="event.preventDefault();_cuMatAnexo=null;document.getElementById('cuMatFile').value='';this.parentElement.innerHTML='máx. 8 MB — arquivo fica guardado no próprio sistema, dividido em partes'" style="color:var(--bad);margin-left:6px;font-weight:700">remover</a>`
   }
   reader.readAsDataURL(file)
 }
@@ -3434,14 +3438,17 @@ function addMaterialCurso(){
   if(!url&&!_cuMatAnexo){toast('Cole um link ou anexe um arquivo PDF','err');return}
   const mat={id:genId(),tipo,nome}
   if(url)mat.url=url
-  if(_cuMatAnexo)mat.anexo=_cuMatAnexo
+  if(_cuMatAnexo){
+    mat.anexoMeta={name:_cuMatAnexo.name,type:_cuMatAnexo.type,totalChunks:_cuMatAnexo.chunks.length}
+    mat._pendingChunks=_cuMatAnexo.chunks
+  }
   tempItems.push(mat)
   document.getElementById('cuMatNome').value=''
   document.getElementById('cuMatUrl').value=''
   document.getElementById('cuMatFile').value=''
   _cuMatAnexo=null
   const info=document.getElementById('cuMatFileInfo')
-  if(info)info.textContent='máx. 2 MB'
+  if(info)info.textContent='máx. 8 MB — arquivo fica guardado no próprio sistema, dividido em partes'
   renderCursoMateriais()
 }
 function removerMaterialCurso(id){
@@ -3456,7 +3463,7 @@ function renderCursoMateriais(){
       <span style="font-size:15px">${_icTipoMat[m.tipo]||'📎'}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.nome}</div>
-        <div style="font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.anexo?`📎 arquivo anexado (${m.anexo.name})`:(m.url||'')}</div>
+        <div style="font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.anexoMeta?`📎 arquivo anexado (${m.anexoMeta.name})`:(m.url||'')}</div>
       </div>
       <button class="btn-ic btn-d" onclick="removerMaterialCurso('${m.id}')"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>`).join('')
@@ -3464,9 +3471,20 @@ function renderCursoMateriais(){
 function salvarCurso(){
   const titulo=v('cuTitulo')
   if(!titulo.trim()){toast('Informe o título do curso','err');return}
-  const c={id:editId||genId(),titulo:titulo.trim(),categoria:v('cuCategoria'),descricao:(document.getElementById('cuDescricao')||{}).value||'',materiais:tempItems,dt:editId?(DB.get(S.CURSOS).find(x=>x.id===editId)||{}).dt||today():today()}
+  // os pedacos dos PDFs (_pendingChunks) nunca entram no registro do curso - so vao pro Firestore separado
+  const materiaisFinal=tempItems.map(m=>({id:m.id,tipo:m.tipo,nome:m.nome,url:m.url,anexoMeta:m.anexoMeta}))
+  const c={id:editId||genId(),titulo:titulo.trim(),categoria:v('cuCategoria'),descricao:(document.getElementById('cuDescricao')||{}).value||'',materiais:materiaisFinal,dt:editId?(DB.get(S.CURSOS).find(x=>x.id===editId)||{}).dt||today():today()}
   const cursos=DB.get(S.CURSOS);if(editId){const i=cursos.findIndex(x=>x.id===editId);if(i>=0)cursos[i]=c}else cursos.push(c)
-  DB.set(S.CURSOS,cursos);closeModal();toast(editId?'Curso atualizado!':'Curso cadastrado!','ok');render('cursos')
+  DB.set(S.CURSOS,cursos)
+  // sobe os pedacos dos PDFs novos, um documento por pedaco (cada um bem abaixo do limite de tamanho do Firestore)
+  tempItems.forEach(m=>{
+    if(m._pendingChunks&&_fdb){
+      m._pendingChunks.forEach((chunk,i)=>{
+        _orgCol('fotos').doc(`curso_mat_${m.id}_${i}`).set({data:chunk,i,total:m._pendingChunks.length}).catch(e=>console.warn('anexo curso chunk:',e))
+      })
+    }
+  })
+  closeModal();toast(editId?'Curso atualizado!':'Curso cadastrado!','ok');render('cursos')
 }
 function excluirCurso(id){
   const c=DB.get(S.CURSOS).find(x=>x.id===id);if(!c)return
@@ -3475,10 +3493,19 @@ function excluirCurso(id){
     toast('Curso excluído','ok');render('cursos')
   })
 }
-function abrirMaterialCurso(cursoId,matId){
+async function abrirMaterialCurso(cursoId,matId){
   const c=DB.get(S.CURSOS).find(x=>x.id===cursoId);if(!c)return
   const m=(c.materiais||[]).find(x=>x.id===matId);if(!m)return
-  if(m.anexo)verAnexo(m.anexo)
+  if(m.anexoMeta){
+    if(!_fdb){toast('Sem conexão com o servidor pra abrir o arquivo','err');return}
+    toast('Carregando arquivo...','')
+    try{
+      const total=m.anexoMeta.totalChunks
+      const snaps=await Promise.all(Array.from({length:total},(_,i)=>_orgCol('fotos').doc(`curso_mat_${m.id}_${i}`).get()))
+      const data=snaps.map(s=>s.exists?s.data().data:'').join('')
+      verAnexo({name:m.anexoMeta.name,type:m.anexoMeta.type,data})
+    }catch(e){toast('Erro ao carregar o arquivo','err');console.warn('abrir material curso:',e)}
+  }
   else if(m.url)window.open(m.url,'_blank','noopener')
 }
 function verCurso(id){
@@ -3488,7 +3515,7 @@ function verCurso(id){
       <span style="font-size:18px">${_icTipoMat[m.tipo]||'📎'}</span>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:700;color:var(--txt)">${m.nome}</div>
-        <div style="font-size:11px;color:var(--cara);word-break:break-all">${m.anexo?`📎 ${m.anexo.name}`:(m.url||'')}</div>
+        <div style="font-size:11px;color:var(--cara);word-break:break-all">${m.anexoMeta?`📎 ${m.anexoMeta.name}`:(m.url||'')}</div>
       </div>
       <span style="color:var(--txt3)">↗</span>
     </button>`).join(''):`<p style="font-size:13px;color:var(--txt3);font-style:italic">Nenhum material cadastrado</p>`
