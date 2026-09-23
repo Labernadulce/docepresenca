@@ -635,12 +635,17 @@ function removeAnexo(){
   const box=document.getElementById('anexoBox')
   if(box)box.innerHTML=_anexoInner(null)
 }
-function verAnexo(a){
+function verAnexo(a,existingWin){
   const src=a||tempAnexo;if(!src||!src.data)return
   if(src.type&&src.type.startsWith('image/')){
-    const w=window.open('','_blank')
+    const w=existingWin||window.open('','_blank')
+    if(!w)return
     w.document.write(`<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${src.data}" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>`)
     w.document.close()
+  }else if(src.type&&src.type.includes('pdf')){
+    // abre visualizando na aba (visualizador de PDF do navegador) em vez de forçar download
+    if(existingWin)existingWin.location.href=src.data
+    else window.open(src.data,'_blank')
   }else{
     const el=document.createElement('a');el.href=src.data;el.download=src.name||'arquivo';document.body.appendChild(el);el.click();document.body.removeChild(el)
   }
@@ -3504,13 +3509,19 @@ async function abrirMaterialCurso(cursoId,matId){
   const m=(c.materiais||[]).find(x=>x.id===matId);if(!m)return
   if(m.anexoMeta){
     if(!_fdb){toast('Sem conexão com o servidor pra abrir o arquivo','err');return}
-    toast('Carregando arquivo...','')
+    // abre a aba já no clique (senão o navegador bloqueia o pop-up depois do carregamento assíncrono)
+    // e só preenche o conteúdo quando os pedaços chegarem
+    const w=window.open('','_blank')
+    if(w)w.document.write('<html><body style="margin:0;background:#111;color:rgba(255,255,255,.6);display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;font-size:14px">Carregando arquivo...</body></html>')
     try{
       const total=m.anexoMeta.totalChunks
       const snaps=await Promise.all(Array.from({length:total},(_,i)=>_orgCol('fotos').doc(`curso_mat_${m.id}_${i}`).get()))
       const data=snaps.map(s=>s.exists?s.data().data:'').join('')
-      verAnexo({name:m.anexoMeta.name,type:m.anexoMeta.type,data})
-    }catch(e){toast('Erro ao carregar o arquivo','err');console.warn('abrir material curso:',e)}
+      verAnexo({name:m.anexoMeta.name,type:m.anexoMeta.type,data},w)
+    }catch(e){
+      if(w)w.document.body.textContent='Erro ao carregar o arquivo.'
+      toast('Erro ao carregar o arquivo','err');console.warn('abrir material curso:',e)
+    }
   }
   else if(m.url)window.open(m.url,'_blank','noopener')
 }
