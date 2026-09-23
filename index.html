@@ -43,7 +43,7 @@ body{font-family:'Trebuchet MS','Calibri',sans-serif;background:var(--cream);col
 /* #app é filho flex do body; sem min-width:0 ele nunca encolhe abaixo do conteúdo mais largo
    (ex: uma tabela grande) e a página inteira passa a exigir zoom/scroll horizontal no celular
    em vez de só a tabela rolar dentro do seu próprio cartão. */
-#app{min-width:0}
+#app{min-width:0;flex:1}
 .sidebar{width:var(--sw);background:var(--choc);height:100vh;position:fixed;left:0;top:0;display:flex;flex-direction:column;z-index:100;transition:transform .3s}
 .slogo{padding:12px 14px 10px;border-bottom:1px solid rgba(255,255,255,.07)}
 .slogo img{max-height:68px;width:auto;max-width:140px;object-fit:contain;display:block;margin:0 auto}
