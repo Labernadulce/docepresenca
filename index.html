@@ -306,6 +306,11 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 00-7 17.29V21a1 1 0 001 1h12a1 1 0 001-1v-1.71A10 10 0 0012 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 14c0-1.66 1.34-3 3-3s3 1.34 3 3M12 11V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       Receitas
     </div>
+    <div class="snav-lbl">Cursos</div>
+    <div class="ni" data-page="cursos" onclick="navigate('cursos')">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5-10-5z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6 12v5c0 1.5 2.5 3 6 3s6-1.5 6-3v-5" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      Cursos
+    </div>
     <div class="snav-lbl">Configurações</div>
     <div class="ni" data-page="empresa" onclick="navigate('empresa')">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 22V12h6v10" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
@@ -404,8 +409,8 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
 
 <script>
 // ===== CONSTANTS =====
-const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc',COMPRAS:'ds_cmp',TRANS:'ds_trn',OS:'ds_os',EMPRESA:'ds_emp',RECEITAS:'ds_rec',PRODUCOES:'ds_producoes',RECSTATUS:'ds_rec_status',CONTRATOS:'ds_cont',PGTOS:'ds_pgtos'}
-const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção'}
+const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc',COMPRAS:'ds_cmp',TRANS:'ds_trn',OS:'ds_os',EMPRESA:'ds_emp',RECEITAS:'ds_rec',PRODUCOES:'ds_producoes',RECSTATUS:'ds_rec_status',CONTRATOS:'ds_cont',PGTOS:'ds_pgtos',CURSOS:'ds_cursos'}
+const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção',cursos:'Cursos'}
 
 // ===== DB =====
 // Cada empresa (tenant) tem suas proprias chaves de localStorage, prefixadas pelo slug da URL (?empresa=)
@@ -765,6 +770,7 @@ function render(p){
     case'empresa':el.innerHTML=empresaHTML();break
     case'contratos':el.innerHTML=contHTML();bindCont();break
     case'romaneio':el.innerHTML=romaneioHTML();bindRomaneio();break
+    case'cursos':el.innerHTML=cursosHTML();bindCursos();break
   }
 }
 
@@ -2668,19 +2674,22 @@ function renderCmpTable(){
   const totalMes=allCmp.filter(c=>c.data.startsWith(mes)).reduce((a,c)=>a+(c.total||0),0)
   const totalGeral=allCmp.reduce((a,c)=>a+(c.total||0),0)
   const fornSet=new Set(allCmp.map(c=>c.forn))
+  const mesNomesCmp=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+  const mesNomeCmp=mesNomesCmp[parseInt(mes.slice(5))-1]
+  const cmpStatCard=(grad,shadow,emoji,lbl,val,sub)=>`
+    <div style="background:${grad};border-radius:16px;padding:18px 16px;color:#fff;position:relative;overflow:hidden;box-shadow:${shadow}">
+      <div style="font-size:9px;font-weight:800;letter-spacing:1.5px;opacity:.72;margin-bottom:8px;text-transform:uppercase">${lbl}</div>
+      <div style="font-size:20px;font-weight:900;letter-spacing:-.4px;line-height:1.1">${val}</div>
+      <div style="font-size:11px;opacity:.72;margin-top:5px">${sub}</div>
+      <div style="position:absolute;right:-4px;bottom:-8px;font-size:46px;opacity:.15;line-height:1;pointer-events:none">${emoji}</div>
+    </div>`
   const statsEl=document.getElementById('cmpStats')
   if(statsEl)statsEl.innerHTML=[
-    {label:'Total este mês',val:fmt(totalMes),cor:'var(--bad)',icon:'<path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'},
-    {label:'Total geral',val:fmt(totalGeral),cor:'var(--warn)',icon:'<rect x="2" y="3" width="20" height="14" rx="2" ry="2" stroke="currentColor" stroke-width="2"/><line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="2"/><line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2"/>'},
-    {label:'Registros',val:allCmp.length,cor:'var(--cara)',icon:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" stroke-width="2"/>'},
-    {label:'Fornecedores',val:fornSet.size,cor:'var(--ok)',icon:'<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="2"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" stroke-width="2"/>'},
-  ].map(s=>`<div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:14px">
-    <div style="width:40px;height:40px;border-radius:10px;background:${s.cor}18;display:flex;align-items:center;justify-content:center;flex-shrink:0">
-      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">${s.icon}</svg>
-    </div>
-    <div><div style="font-size:11px;color:var(--txt3);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">${s.label}</div>
-    <div style="font-size:20px;font-weight:800;color:${s.cor}">${s.val}</div></div>
-  </div>`).join('')
+    cmpStatCard('linear-gradient(135deg,#B84040,#D05252)','0 4px 18px rgba(184,64,64,.28)','💸','Total este mês',fmt(totalMes),mesNomeCmp),
+    cmpStatCard('linear-gradient(135deg,#8A6818,#D4AD50)','0 4px 18px rgba(138,104,24,.32)','📦','Total geral',fmt(totalGeral),'desde o início'),
+    cmpStatCard('linear-gradient(135deg,#3D2B1F,#5C4232)','0 4px 18px rgba(61,43,31,.34)','📋','Registros',allCmp.length,'compras lançadas'),
+    cmpStatCard('linear-gradient(135deg,#1A7A3A,#27A84E)','0 4px 18px rgba(26,122,58,.28)','🤝','Fornecedores',fornSet.size,'fornecedores únicos'),
+  ].join('')
 
   const el=document.getElementById('cmpTable');if(!el)return
   if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhuma compra</h3><p>Registre a primeira compra</p></div>`;return}
@@ -3328,6 +3337,132 @@ function renderSlogoInfo(){
   if(!linhas.length)el.innerHTML='<div style="font-size:10px;color:rgba(255,255,255,.25);margin-top:3px">Configure em Minha Empresa</div>'
 }
 function v(id){return(document.getElementById(id)||{}).value||''}
+
+// ===== CURSOS =====
+const _icTipoMat={pdf:'📄',link:'🔗',video:'🎬'}
+function cursosHTML(){
+  return`
+  <div class="ph"><div><h2>Cursos</h2><p>Materiais de estudo, PDFs e links organizados por curso</p></div>
+    <button class="btn btn-p" onclick="novoCurso()">+ Novo Curso</button></div>
+  <div class="card">
+    <div class="tbar"><div class="srch"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20l-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><input id="srchCurso" placeholder="Buscar curso, categoria..." oninput="renderCursosTable()"></div></div>
+    <div class="tc" id="cursosTable"></div>
+  </div>`
+}
+function bindCursos(){renderCursosTable()}
+function renderCursosTable(){
+  const q=(document.getElementById('srchCurso')||{}).value||''
+  let rows=DB.get(S.CURSOS).sort((a,b)=>(b.dt||'').localeCompare(a.dt||''))
+  if(q)rows=rows.filter(c=>(c.titulo+' '+(c.categoria||'')).toLowerCase().includes(q.toLowerCase()))
+  const el=document.getElementById('cursosTable');if(!el)return
+  if(!rows.length){el.innerHTML=`<div class="empty"><h3>Nenhum curso</h3><p>Cadastre o primeiro curso e adicione PDFs e links</p></div>`;return}
+  el.innerHTML=`<table><thead><tr><th>Título</th><th>Categoria</th><th>Materiais</th><th>Criado em</th><th></th></tr></thead><tbody>
+    ${rows.map(c=>`<tr>
+      <td><strong>${c.titulo}</strong>${c.descricao?`<br><small style="color:var(--txt3)">${c.descricao.slice(0,50)}${c.descricao.length>50?'...':''}</small>`:''}</td>
+      <td>${c.categoria||'-'}</td>
+      <td>${(c.materiais||[]).length?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">${(c.materiais||[]).map(m=>_icTipoMat[m.tipo]||'📎').join(' ')} ${(c.materiais||[]).length}</span>`:'<span style="color:var(--txt3)">-</span>'}</td>
+      <td>${fmtDate(c.dt)}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-ic" style="margin-right:4px" onclick="verCurso('${c.id}')" title="Ver"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg></button>
+        <button class="btn-ic" style="margin-right:4px" onclick="editCurso('${c.id}')" title="Editar"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn-ic btn-d" onclick="excluirCurso('${c.id}')" title="Excluir"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </td>
+    </tr>`).join('')}
+  </tbody></table>`
+}
+function novoCurso(){
+  editId=null;tempItems=[]
+  openModal('Novo Curso',cursoForm({}),
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarCurso()">Salvar</button>`,true)
+  renderCursoMateriais()
+}
+function editCurso(id){
+  const c=DB.get(S.CURSOS).find(x=>x.id===id);if(!c)return
+  editId=id;tempItems=(c.materiais||[]).map(m=>({...m}))
+  openModal('Editar Curso',cursoForm(c),
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarCurso()">Salvar</button>`,true)
+  renderCursoMateriais()
+}
+function cursoForm(c){
+  const istl='padding:7px 8px;border:1.5px solid var(--cream2);border-radius:7px;font-size:12px;font-family:inherit;outline:none;color:var(--txt);background:var(--white)'
+  return`
+  <div class="frow"><div class="fg"><label>Título *</label><input id="cuTitulo" value="${c.titulo||''}" placeholder="Ex: Confeitaria Básica"></div>
+  <div class="fg"><label>Categoria</label><input id="cuCategoria" value="${c.categoria||''}" placeholder="Ex: Bolos, Doces finos..."></div></div>
+  <div class="fg"><label>Descrição</label><textarea id="cuDescricao" placeholder="Do que se trata este curso...">${c.descricao||''}</textarea></div>
+  <div style="margin-top:6px;padding-top:14px;border-top:1px solid var(--cream2)">
+    <label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:8px">Materiais (PDFs, links, vídeos)</label>
+    <div style="display:grid;grid-template-columns:90px 1fr 1.4fr 32px;gap:6px;margin-bottom:10px;align-items:center">
+      <select id="cuMatTipo" style="${istl}">
+        <option value="pdf">📄 PDF</option>
+        <option value="link">🔗 Link</option>
+        <option value="video">🎬 Vídeo</option>
+      </select>
+      <input id="cuMatNome" placeholder="Nome do material" style="${istl}">
+      <input id="cuMatUrl" placeholder="https://..." style="${istl}">
+      <button class="btn-ic" style="background:var(--cara);color:#fff" onclick="addMaterialCurso()" title="Adicionar material"><svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+    </div>
+    <div id="cuMateriaisList"></div>
+  </div>`
+}
+function addMaterialCurso(){
+  const tipo=v('cuMatTipo')||'link'
+  const nome=v('cuMatNome').trim()
+  const url=v('cuMatUrl').trim()
+  if(!nome||!url){toast('Informe o nome e o link do material','err');return}
+  tempItems.push({id:genId(),tipo,nome,url})
+  document.getElementById('cuMatNome').value=''
+  document.getElementById('cuMatUrl').value=''
+  renderCursoMateriais()
+}
+function removerMaterialCurso(id){
+  tempItems=tempItems.filter(m=>m.id!==id)
+  renderCursoMateriais()
+}
+function renderCursoMateriais(){
+  const el=document.getElementById('cuMateriaisList');if(!el)return
+  if(!tempItems.length){el.innerHTML=`<p style="font-size:12px;color:var(--txt3);font-style:italic">Nenhum material adicionado ainda</p>`;return}
+  el.innerHTML=tempItems.map(m=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border:1.5px solid var(--cream2);border-radius:8px;margin-bottom:6px;background:var(--cream)">
+      <span style="font-size:15px">${_icTipoMat[m.tipo]||'📎'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.nome}</div>
+        <div style="font-size:11px;color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.url}</div>
+      </div>
+      <button class="btn-ic btn-d" onclick="removerMaterialCurso('${m.id}')"><svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>`).join('')
+}
+function salvarCurso(){
+  const titulo=v('cuTitulo')
+  if(!titulo.trim()){toast('Informe o título do curso','err');return}
+  const c={id:editId||genId(),titulo:titulo.trim(),categoria:v('cuCategoria'),descricao:(document.getElementById('cuDescricao')||{}).value||'',materiais:tempItems,dt:editId?(DB.get(S.CURSOS).find(x=>x.id===editId)||{}).dt||today():today()}
+  const cursos=DB.get(S.CURSOS);if(editId){const i=cursos.findIndex(x=>x.id===editId);if(i>=0)cursos[i]=c}else cursos.push(c)
+  DB.set(S.CURSOS,cursos);closeModal();toast(editId?'Curso atualizado!':'Curso cadastrado!','ok');render('cursos')
+}
+function excluirCurso(id){
+  const c=DB.get(S.CURSOS).find(x=>x.id===id);if(!c)return
+  confirmarModal(`Deseja excluir o curso <strong>${c.titulo}</strong>?<br><small style="color:var(--txt3)">Esta ação não pode ser desfeita.</small>`,()=>{
+    DB.set(S.CURSOS,DB.get(S.CURSOS).filter(x=>x.id!==id))
+    toast('Curso excluído','ok');render('cursos')
+  })
+}
+function verCurso(id){
+  const c=DB.get(S.CURSOS).find(x=>x.id===id);if(!c)return
+  const matsHtml=(c.materiais||[]).length?(c.materiais||[]).map(m=>`
+    <a href="${m.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1.5px solid var(--cream2);border-radius:8px;margin-bottom:8px;background:var(--cream);text-decoration:none;color:inherit">
+      <span style="font-size:18px">${_icTipoMat[m.tipo]||'📎'}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--txt)">${m.nome}</div>
+        <div style="font-size:11px;color:var(--cara);word-break:break-all">${m.url}</div>
+      </div>
+      <span style="color:var(--txt3)">↗</span>
+    </a>`).join(''):`<p style="font-size:13px;color:var(--txt3);font-style:italic">Nenhum material cadastrado</p>`
+  openModal(c.titulo,`
+    ${c.categoria?`<span style="background:var(--cream2);color:var(--txt2);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;display:inline-block;margin-bottom:10px">${c.categoria}</span>`:''}
+    ${c.descricao?`<p style="font-size:13px;color:var(--txt2);line-height:1.6;margin-bottom:16px">${c.descricao}</p>`:''}
+    <label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:8px">Materiais</label>
+    ${matsHtml}`,
+    `<button class="btn btn-s" onclick="closeModal()">Fechar</button><button class="btn btn-p" onclick="editCurso('${c.id}')">Editar</button>`,true)
+}
 
 // ===== ORDENS DE SERVIÇO =====
 const lblOS={aberta:'Aberta',em_andamento:'Em Andamento',concluida:'Concluída',cancelada:'Cancelada'}
@@ -4164,6 +4299,17 @@ function getStatusRec(recId){
   return(DB.get(S.RECSTATUS)||[]).find(x=>x.recId===recId&&x.data===hoje)||null
 }
 function alterarStatusReceita(recId,novoStatus){
+  if(novoStatus==='cancelado'){
+    const hist=DB.get(S.PRODUCOES)
+    const idx=hist.findIndex(x=>x.recId===recId&&x.data===today())
+    if(idx>=0){
+      // já tinha sido registrada (ingredientes descontados) - cancelar devolve o estoque e apaga o registro
+      _reverterEstoqueProducao(hist[idx])
+      hist.splice(idx,1)
+      DB.set(S.PRODUCOES,hist)
+      toast('Produção cancelada: ingredientes devolvidos ao estoque','ok')
+    }
+  }
   const all=(DB.get(S.RECSTATUS)||[]).filter(x=>!(x.recId===recId&&x.data===today()))
   if(novoStatus!=='aberto')all.push({recId,data:today(),status:novoStatus})
   DB.set(S.RECSTATUS,all)
@@ -7429,7 +7575,7 @@ const _FB_CFG={
   messagingSenderId:'355799786526',
   appId:'1:355799786526:web:3bf1f988bb0cda65ddfa0f'
 }
-const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos']
+const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos','ds_cursos']
 let _fdb=null,_fbReady=false,_fbAuthReady=false
 // Isolamento por empresa: as regras de seguranca do projeto so liberam as colecoes ja existentes
 // (store, contratos_pub, assinaturas, fotos) - uma colecao nova tipo 'orgs' e rejeitada (testado e confirmado).
@@ -7708,6 +7854,7 @@ const MODULOS_CATALOGO=[
   {key:'os',label:'Ordens de Serviço'},
   {key:'relatorios',label:'Relatórios'},
   {key:'receitas',label:'Receitas'},
+  {key:'cursos',label:'Cursos'},
 ]
 let _tenantLoginUser=LOGIN_USER,_tenantLoginHash=LOGIN_HASH,_tenantNome='',_tenantConfigLoaded=(window.__TENANT_SLUG__==='laberna-dulce')
 // null = acesso total (empresa original e qualquer doc antigo sem o campo); array = só esses módulos liberados.
