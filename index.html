@@ -644,15 +644,24 @@ function verAnexo(a,existingWin){
     w.document.close()
   }else if(src.type&&src.type.includes('pdf')){
     // abre visualizando na aba (visualizador de PDF do navegador) em vez de forçar download.
-    // o PDF entra num <iframe> em vez de navegar a aba direto pro link "data:" - o Chrome bloqueia
-    // essa navegação direta (prevenção de phishing), mas permite o data: como origem de um iframe.
+    // o PDF entra num <iframe> apontando pra um Blob (URL.createObjectURL) - um link "data:" gigante
+    // (arquivo inteiro em texto) trava/congela o navegador ao carregar; Blob é binário de verdade,
+    // o navegador não precisa processar um texto de milhões de caracteres pra exibir.
     const w=existingWin||window.open('','_blank')
     if(!w)return
-    w.document.write(`<html><head><title>${src.name||'Documento'}</title></head><body style="margin:0"><iframe src="${src.data}" style="border:none;width:100vw;height:100vh"></iframe></body></html>`)
+    const blobUrl=_dataURLtoBlobURL(src.data,src.type)
+    w.document.write(`<html><head><title>${src.name||'Documento'}</title></head><body style="margin:0"><iframe src="${blobUrl}" style="border:none;width:100vw;height:100vh"></iframe></body></html>`)
     w.document.close()
   }else{
     const el=document.createElement('a');el.href=src.data;el.download=src.name||'arquivo';document.body.appendChild(el);el.click();document.body.removeChild(el)
   }
+}
+function _dataURLtoBlobURL(dataurl,type){
+  const bstr=atob(dataurl.split(',')[1])
+  let n=bstr.length
+  const u8=new Uint8Array(n)
+  while(n--)u8[n]=bstr.charCodeAt(n)
+  return URL.createObjectURL(new Blob([u8],{type:type||'application/octet-stream'}))
 }
 function verComprovante(id){const v=DB.get(S.VENDAS).find(x=>x.id===id);if(v&&v.comprovante)verAnexo(v.comprovante)}
 function verNotaCompra(id){const c=DB.get(S.COMPRAS).find(x=>x.id===id);if(c&&c.notaAnexo)verAnexo(c.notaAnexo)}
