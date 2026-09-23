@@ -7589,6 +7589,36 @@ async function _fbInit(){
         _sigCarregado=true
       }
     })
+    // Aprova o orçamento automaticamente assim que o cliente assina pelo link - antes precisava clicar
+    // em "🔔 Verificar Aprovações" manualmente toda vez, mesmo já sabendo que a assinatura tinha chegado.
+    // Mesmo tiro-o-prefixo-da-empresa (ver nota no listener de assinaturas acima).
+    let _orcAprovCarregado=false
+    if(window.__TENANT_SLUG__==='laberna-dulce')_orgCol('contratos_pub').onSnapshot(snap=>{
+      const _pfxSig2=window.__TENANT_SLUG__+'__'
+      const _aplicar=(rawId,d,avisar)=>{
+        if(!rawId.startsWith(_pfxSig2))return
+        if(d.tp!=='orc'||d.aprovado!==true)return
+        const localId=rawId.slice(_pfxSig2.length)
+        const orcs=DB.get(S.ORCAMENTOS)
+        const idx=orcs.findIndex(o=>o.id===localId)
+        if(idx<0||orcs[idx].status==='aprovado')return
+        if(d.opcaoEscolhida!=null)orcs[idx].opcaoAprovada=d.opcaoEscolhida
+        orcs[idx].status='aprovado'
+        DB.set(S.ORCAMENTOS,orcs)
+        if(avisar)toast(`✅ Orçamento Nº ${orcNumFmt(orcs[idx])} aprovado por ${d.aprovadoPor||'cliente'}!`,'ok')
+        _orgCol('contratos_pub').doc(localId).set({aprovado:false},{merge:true}).catch(()=>{})
+        if(page==='orcamentos')render('orcamentos')
+      }
+      snap.docChanges().forEach(change=>{
+        if(!_orcAprovCarregado)return // primeira carga fica pro loop abaixo, pra nao reaprovar tudo de uma vez sem avisar
+        if(change.type!=='added'&&change.type!=='modified')return
+        _aplicar(change.doc.id,change.doc.data(),true)
+      })
+      if(!_orcAprovCarregado){
+        snap.docs.forEach(doc=>_aplicar(doc.id,doc.data(),false))
+        _orcAprovCarregado=true
+      }
+    })
   }catch(err){
     console.warn('Firebase error:',err)
     _fbPanel('⚠','Erro de conexão','var(--bad)')
