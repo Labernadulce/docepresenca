@@ -1533,19 +1533,60 @@ function salvarOrc(){
 }
 // Mesma tela de "Ver Parcelas" do contrato, só que pro orçamento - se o cliente já começou a pagar
 // antes mesmo de virar contrato formal, ou pra planejar o cronograma já sabendo quem pagou o quê.
+// Comprovante de pagamento de UMA parcela específica (não o anexo geral do contrato) - fica guardado
+// na coleção 'fotos' (não dentro do documento do contrato/orçamento, que reúne TODOS juntos e estouraria
+// o limite de tamanho do Firestore se cada parcela de cada contrato carregasse uma imagem embutida).
+// No registro local fica só um sinalizador leve (temComprovante:true), não a imagem em si.
+function _parcelaComprovanteId(tipo,entId,idAttr){ return tipo+'_comprovante_'+entId+'_'+idAttr }
+function handleParcelaAnexo(input,tipo,entId,idAttr){
+  const file=input.files[0];if(!file)return
+  if(file.size>2*1024*1024){toast('Arquivo muito grande (máx. 2 MB)','err');input.value='';return}
+  const reader=new FileReader()
+  reader.onload=async e=>{
+    const anexo={name:file.name,type:file.type,data:e.target.result}
+    if(!_fdb){toast('Firebase indisponível no momento.','err');return}
+    try{
+      await _orgCol('fotos').doc(_parcelaComprovanteId(tipo,entId,idAttr)).set(anexo)
+    }catch(err){console.warn(err);toast('Erro ao anexar comprovante.','err');return}
+    const store=tipo==='cont'?S.CONTRATOS:S.ORCAMENTOS
+    const list=DB.get(store);const i=list.findIndex(x=>x.id===entId);if(i<0)return
+    if(idAttr==='entrada')list[i].entradaComprovante=true
+    else if(Array.isArray(list[i].parcelasPlano)&&list[i].parcelasPlano[idAttr])list[i].parcelasPlano[idAttr].temComprovante=true
+    DB.set(store,list)
+    const lblId=(tipo==='cont'?'pcAnexoLbl_':'poAnexoLbl_')+idAttr
+    const span=document.getElementById(lblId)
+    if(span){span.textContent='📎 Ver comprovante';span.setAttribute('onclick',`verComprovanteParcela('${tipo}','${entId}','${idAttr}')`)}
+    toast('Comprovante anexado!','ok')
+  }
+  reader.readAsDataURL(file)
+}
+async function verComprovanteParcela(tipo,entId,idAttr){
+  if(!_fdb){toast('Firebase indisponível no momento.','err');return}
+  try{
+    const snap=await _orgCol('fotos').doc(_parcelaComprovanteId(tipo,entId,idAttr)).get()
+    if(!snap.exists){toast('Nenhum comprovante encontrado.','err');return}
+    const a=snap.data()
+    const w=window.open('','_blank')
+    if(!w)return
+    if((a.type||'').startsWith('image/'))w.document.write(`<body style="margin:0;background:#1C1A18;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${a.data}" style="max-width:100%;max-height:100vh"></body>`)
+    else w.location.href=a.data
+  }catch(e){console.warn(e);toast('Erro ao abrir comprovante.','err')}
+}
 function verParcelasOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const plano=o.parcelasPlano||[]
-  const linha=(lbl,valor,dataVal,pago,idAttr)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
+  const linha=(lbl,valor,dataVal,pago,idAttr,temComprovante)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
     <div><strong style="font-size:13px;color:var(--txt)">${lbl}</strong><div style="font-size:12px;color:var(--txt2)">${fmt(valor)}</div></div>
-    <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
       <input type="date" id="poData_${idAttr}" value="${dataVal||''}" style="padding:7px 9px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--txt2)"><input type="checkbox" id="poPago_${idAttr}" ${pago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Pago</label>
+      <input type="file" id="poAnexoInput_${idAttr}" accept="image/*,.pdf" style="display:none" onchange="handleParcelaAnexo(this,'orc','${id}','${idAttr}')">
+      <span id="poAnexoLbl_${idAttr}" onclick="${temComprovante?`verComprovanteParcela('orc','${id}','${idAttr}')`:`document.getElementById('poAnexoInput_${idAttr}').click()`}" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:5px 9px;cursor:pointer;white-space:nowrap">${temComprovante?'📎 Ver comprovante':'📎 Anexar comprovante'}</span>
     </div>
   </div>`
   let body=''
-  if(o.entradaPct)body+=linha('Entrada / Sinal',o.totalF*o.entradaPct/100,o.entradaData,o.entradaPaga,'entrada')
-  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i))})
+  if(o.entradaPct)body+=linha('Entrada / Sinal',o.totalF*o.entradaPct/100,o.entradaData,o.entradaPaga,'entrada',!!o.entradaComprovante)
+  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i),!!p.temComprovante)})
   if(!body)body='<p style="color:var(--txt3);font-size:13px">Este orçamento não tem parcelamento configurado.</p>'
   openModal('📋 Parcelas — '+clienteNome(o.cliId),body,
     body?`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarParcelasOrc('${id}')">Salvar</button>`:`<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
@@ -1916,16 +1957,18 @@ function toggleContPago(id,campo){
 function verParcelasCont(id){
   const c=DB.get(S.CONTRATOS).find(x=>x.id===id);if(!c)return
   const plano=c.parcelasPlano||[]
-  const linha=(lbl,valor,dataVal,pago,idAttr)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
+  const linha=(lbl,valor,dataVal,pago,idAttr,temComprovante)=>`<div class="frow" style="align-items:center;margin-bottom:10px">
     <div><strong style="font-size:13px;color:var(--txt)">${lbl}</strong><div style="font-size:12px;color:var(--txt2)">${fmt(valor)}</div></div>
-    <div style="display:flex;gap:10px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap">
       <input type="date" id="pcData_${idAttr}" value="${dataVal||''}" style="padding:7px 9px;border:1.5px solid var(--cream2);border-radius:6px;font-size:12px;font-family:inherit">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--txt2)"><input type="checkbox" id="pcPago_${idAttr}" ${pago?'checked':''} style="width:16px;height:16px;accent-color:var(--ok)">Pago</label>
+      <input type="file" id="pcAnexoInput_${idAttr}" accept="image/*,.pdf" style="display:none" onchange="handleParcelaAnexo(this,'cont','${id}','${idAttr}')">
+      <span id="pcAnexoLbl_${idAttr}" onclick="${temComprovante?`verComprovanteParcela('cont','${id}','${idAttr}')`:`document.getElementById('pcAnexoInput_${idAttr}').click()`}" style="font-size:11px;color:#7B5EA7;background:#F3EEFA;border:1px solid #D9CCEF;border-radius:6px;padding:5px 9px;cursor:pointer;white-space:nowrap">${temComprovante?'📎 Ver comprovante':'📎 Anexar comprovante'}</span>
     </div>
   </div>`
   let body=''
-  if(c.entrada>0)body+=linha('Entrada / Sinal',c.entrada,c.entradaData,c.entradaPaga,'entrada')
-  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i))})
+  if(c.entrada>0)body+=linha('Entrada / Sinal',c.entrada,c.entradaData,c.entradaPaga,'entrada',!!c.entradaComprovante)
+  plano.forEach((p,i)=>{body+=linha(`Parcela ${p.n}/${plano.length}`,p.valor,p.data,p.pago,String(i),!!p.temComprovante)})
   if(!body)body='<p style="color:var(--txt3);font-size:13px">Este contrato não tem parcelamento configurado.</p>'
   openModal('📋 Parcelas — '+clienteNome(c.cliId),body,
     body?`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarParcelasCont('${id}')">Salvar</button>`:`<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
