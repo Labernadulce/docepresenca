@@ -661,7 +661,10 @@ async function buscarFotosProduto(){
   const nomeEl=document.getElementById('pNome')||document.getElementById('rNome')
   const nome=(nomeEl||{}).value||''
   const marca=(document.getElementById('pMarca')||{}).value||''
-  const base=(nome+' '+marca).trim()
+  // marca primeiro, nome depois: no corte progressivo abaixo (tira a ultima palavra quando a frase
+  // inteira nao acha nada) a marca fica sempre no filtro e quem vai sendo cortado sao as palavras
+  // do nome (ex: "tradicional", "artesanal") - o usuario pediu pra marca ser o filtro principal.
+  const base=(marca+' '+nome).trim()
   if(!base){toast('Digite o nome do item primeiro','err');return}
   const box=document.getElementById('fotoBuscaResults');if(!box)return
   box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Buscando fotos...</div>'
