@@ -668,16 +668,24 @@ async function buscarFotosProduto(){
   const palavras=base.split(/\s+/)
   let resultados=[],fonteUsada=''
   // cada fonte tem seu proprio try/catch - se o Open Food Facts falhar (fora do ar, limite de
-  // requisicoes etc) isso nao pode travar a busca inteira, tem que cair pro Openverse mesmo assim
-  try{
-    for(let n=palavras.length;n>=1&&!resultados.length;n--){
-      const q=palavras.slice(0,n).join(' ')
-      const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=10`)
-      const d=await res.json()
-      const comFoto=(d.products||[]).filter(p=>p.image_front_url)
-      if(comFoto.length){resultados=comFoto.slice(0,8).map(p=>({src:p.image_front_url}));fonteUsada='Open Food Facts'}
-    }
-  }catch(err){console.warn('busca de fotos (Open Food Facts):',err)}
+  // requisicoes etc) isso nao pode travar a busca inteira, tem que cair pro Openverse mesmo assim.
+  // o Open Food Facts as vezes barra requisicao anonima em rajada ("Page temporarily unavailable")
+  // e volta sozinho poucos segundos depois - por isso tenta 1x, espera um pouco e tenta mais 1x
+  // antes de desistir e cair pro Openverse (evita cair no respaldo pior por causa de um soluço passageiro).
+  for(let tentativa=1;tentativa<=2&&!resultados.length;tentativa++){
+    try{
+      if(tentativa===2)await new Promise(r=>setTimeout(r,2500))
+      for(let n=palavras.length;n>=1&&!resultados.length;n--){
+        const q=palavras.slice(0,n).join(' ')
+        const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=10`)
+        const ct=res.headers.get('content-type')||''
+        if(!res.ok||!ct.includes('json'))throw new Error('Open Food Facts indisponível (status '+res.status+')')
+        const d=await res.json()
+        const comFoto=(d.products||[]).filter(p=>p.image_front_url)
+        if(comFoto.length){resultados=comFoto.slice(0,8).map(p=>({src:p.image_front_url}));fonteUsada='Open Food Facts'}
+      }
+    }catch(err){console.warn(`busca de fotos (Open Food Facts, tentativa ${tentativa}):`,err)}
+  }
   if(!resultados.length){
     try{
       for(let n=palavras.length;n>=1&&!resultados.length;n--){
