@@ -667,6 +667,8 @@ async function buscarFotosProduto(){
   box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Buscando fotos...</div>'
   const palavras=base.split(/\s+/)
   let resultados=[],fonteUsada=''
+  // cada fonte tem seu proprio try/catch - se o Open Food Facts falhar (fora do ar, limite de
+  // requisicoes etc) isso nao pode travar a busca inteira, tem que cair pro Openverse mesmo assim
   try{
     for(let n=palavras.length;n>=1&&!resultados.length;n--){
       const q=palavras.slice(0,n).join(' ')
@@ -675,15 +677,17 @@ async function buscarFotosProduto(){
       const comFoto=(d.products||[]).filter(p=>p.image_front_url)
       if(comFoto.length){resultados=comFoto.slice(0,8).map(p=>({src:p.image_front_url}));fonteUsada='Open Food Facts'}
     }
-    if(!resultados.length){
+  }catch(err){console.warn('busca de fotos (Open Food Facts):',err)}
+  if(!resultados.length){
+    try{
       for(let n=palavras.length;n>=1&&!resultados.length;n--){
         const q=palavras.slice(0,n).join(' ')
         const res=await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=8&mature=false`)
         const d=await res.json()
         if(d.results&&d.results.length){resultados=d.results.slice(0,8).map(r=>({src:r.thumbnail||r.url}));fonteUsada='Openverse'}
       }
-    }
-  }catch(err){console.warn('busca de fotos:',err);box.innerHTML='<div style="font-size:12px;color:var(--bad)">Erro ao buscar fotos. Tente novamente.</div>';return}
+    }catch(err){console.warn('busca de fotos (Openverse):',err)}
+  }
   if(!resultados.length){
     box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Nenhuma foto encontrada pra "'+base+'". Tente outro nome ou envie um arquivo.</div>'
     return
