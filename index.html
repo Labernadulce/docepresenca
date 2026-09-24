@@ -648,8 +648,14 @@ function anexoWidget(existing, lbl, buscavel){
     </div>`:''}
   </div>`
 }
-// Busca fotos de exemplo por nome (Openverse - agrega Flickr/Wikimedia/etc, não exige chave de API)
-// pra evitar o usuário ter que sair procurando/baixando foto na internet e subir manualmente.
+// Busca fotos de exemplo por nome. Duas fontes, sem exigir chave de API:
+// 1) Open Food Facts - banco aberto de produtos alimentícios com fotos REAIS de embalagem/marca
+//    (ex: "farinha de trigo dona benta" acha a foto de verdade do pacote) - melhor fonte pra
+//    ingrediente/produto de mercado, que é o caso mais comum aqui.
+// 2) Openverse (agrega Flickr/Wikimedia/etc) - respaldo pra quando não é um item alimentício
+//    ou o Open Food Facts não tem foto cadastrada pra ele.
+// Em ambas, se a frase inteira não achar nada, vai cortando a última palavra e tenta de novo
+// (ex: "farinha de trigo tradicional" pode não bater, mas "farinha de trigo" acha bastante coisa).
 let _fotoBuscaResults=[]
 async function buscarFotosProduto(){
   const nomeEl=document.getElementById('pNome')||document.getElementById('rNome')
@@ -659,27 +665,34 @@ async function buscarFotosProduto(){
   if(!base){toast('Digite o nome do item primeiro','err');return}
   const box=document.getElementById('fotoBuscaResults');if(!box)return
   box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Buscando fotos...</div>'
-  // tenta a frase inteira primeiro; se nao achar nada, vai cortando a ultima palavra e tenta de novo
-  // (ex: "farinha de trigo tradicional" as vezes nao bate com nada, mas "farinha de trigo" acha bastante coisa)
   const palavras=base.split(/\s+/)
-  let data=null
+  let resultados=[],fonteUsada=''
   try{
-    for(let n=palavras.length;n>=1;n--){
+    for(let n=palavras.length;n>=1&&!resultados.length;n--){
       const q=palavras.slice(0,n).join(' ')
-      const res=await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=8&mature=false`)
+      const res=await fetch(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=10`)
       const d=await res.json()
-      if(d.results&&d.results.length){data=d;break}
+      const comFoto=(d.products||[]).filter(p=>p.image_front_url)
+      if(comFoto.length){resultados=comFoto.slice(0,8).map(p=>({src:p.image_front_url}));fonteUsada='Open Food Facts'}
+    }
+    if(!resultados.length){
+      for(let n=palavras.length;n>=1&&!resultados.length;n--){
+        const q=palavras.slice(0,n).join(' ')
+        const res=await fetch(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(q)}&page_size=8&mature=false`)
+        const d=await res.json()
+        if(d.results&&d.results.length){resultados=d.results.slice(0,8).map(r=>({src:r.thumbnail||r.url}));fonteUsada='Openverse'}
+      }
     }
   }catch(err){console.warn('busca de fotos:',err);box.innerHTML='<div style="font-size:12px;color:var(--bad)">Erro ao buscar fotos. Tente novamente.</div>';return}
-  if(!data||!data.results||!data.results.length){
+  if(!resultados.length){
     box.innerHTML='<div style="font-size:12px;color:var(--txt3);padding:6px 0">Nenhuma foto encontrada pra "'+base+'". Tente outro nome ou envie um arquivo.</div>'
     return
   }
-  _fotoBuscaResults=data.results.slice(0,8).map(r=>({src:r.thumbnail||r.url}))
+  _fotoBuscaResults=resultados
   box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px">
     ${_fotoBuscaResults.map((r,i)=>`<img src="${r.src}" style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:6px;border:1.5px solid var(--cream2);cursor:pointer" onclick="selecionarFotoBusca(${i})">`).join('')}
   </div>
-  <div style="font-size:10px;color:var(--txt3);margin-top:5px">Fotos de banco de imagens (Openverse) — clique numa foto pra usar</div>`
+  <div style="font-size:10px;color:var(--txt3);margin-top:5px">Fotos de banco de imagens (${fonteUsada}) — clique numa foto pra usar</div>`
 }
 async function selecionarFotoBusca(i){
   const r=_fotoBuscaResults[i];if(!r)return
