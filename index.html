@@ -5968,7 +5968,7 @@ async function gerarLinkRomaneio(orcId){
   }
   payload._orcId=orcId  // para identificar o orcamento na assinatura
   const base=location.href.split('#')[0]
-  const wa=(e.wa||'').replace(/\D/g,'')
+  const wa=(cli.fone||'').replace(/\D/g,'')
   const cliNome=cli.nome||'cliente'
   let finalUrl=''
   // Salva na coleção assinaturas (comprovadamente acessível por usuários anônimos)
@@ -6795,7 +6795,7 @@ async function gerarLinkOrc(id){
     const encoded=compressed?'z.'+compressed:btoa(unescape(encodeURIComponent(json))).replace(/=+$/,'')
     longUrl=`${_linkBase}#orcview=${encoded}`
   }
-  const wa=e.wa?e.wa.replace(/\D/g,''):''
+  const wa=cli.fone?cli.fone.replace(/\D/g,''):''
   const _waBtn=u=>`<div style="margin-top:12px"><a href="https://wa.me/${wa}?text=${encodeURIComponent('Olá! Segue o link do seu orçamento: '+u)}" target="_blank" class="btn btn-ok" style="width:100%;justify-content:center;text-decoration:none;display:flex">Enviar via WhatsApp</a></div>`
   openModal('Link para o Cliente',`
     <div style="margin-bottom:14px;padding:12px;background:var(--cream);border-radius:8px;font-size:12px;color:var(--txt2)">
@@ -7219,12 +7219,13 @@ async function gerarLinkCont(id){
     }catch(e){finalUrl=longUrl}
   }
   window._contLinkWaMsg='Olá! Segue o link do seu contrato para leitura e assinatura:\n\n'+finalUrl+'\n\nQualquer dúvida estou à disposição 😊'
+  window._contLinkWaNum=(cli.fone||'').replace(/\D/g,'')
   openModal('🔗 Link para Assinatura',
     `<p style="font-size:13px;color:#5A4A3A;margin-bottom:14px;line-height:1.6">Compartilhe este link com o cliente para leitura e assinatura do contrato.</p>
     <input id="linkContUrl" type="text" value="${finalUrl}" readonly style="width:100%;padding:10px;border:1.5px solid #C4B09A;border-radius:6px;font-size:13px;color:#3D3028;background:#FAF7F4;box-sizing:border-box;margin-bottom:12px">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-s" onclick="copiarLinkCont()" style="flex:1;background:#7B5EA7;color:#fff;border-color:#7B5EA7">📋 Copiar Link</button>
-      <button class="btn btn-s" onclick="window.open('https://wa.me/?text='+encodeURIComponent(window._contLinkWaMsg),'_blank')" style="flex:1;background:#25D366;color:#fff;border-color:#25D366">📲 WhatsApp</button>
+      <button class="btn btn-s" onclick="window.open('https://wa.me/'+(window._contLinkWaNum||'')+'?text='+encodeURIComponent(window._contLinkWaMsg),'_blank')" style="flex:1;background:#25D366;color:#fff;border-color:#25D366">📲 WhatsApp</button>
     </div>
     <p style="font-size:10px;color:#9A8E82;margin-top:10px">O cliente abre o link, lê o contrato, digita o nome e confirma via WhatsApp.</p>`
   )
