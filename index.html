@@ -749,6 +749,7 @@ function verAnexo(a,existingWin){
   if(src.type&&src.type.startsWith('image/')){
     const w=existingWin||window.open('','_blank')
     if(!w)return
+    w.document.open()
     w.document.write(`<html><body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${src.data}" style="max-width:100%;max-height:100vh;object-fit:contain"></body></html>`)
     w.document.close()
   }else if(src.type&&src.type.includes('pdf')){
@@ -759,6 +760,7 @@ function verAnexo(a,existingWin){
     const w=existingWin||window.open('','_blank')
     if(!w)return
     const blobUrl=_dataURLtoBlobURL(src.data,src.type)
+    w.document.open()
     w.document.write(`<html><head><title>${src.name||'Documento'}</title></head><body style="margin:0"><iframe src="${blobUrl}" style="border:none;width:100vw;height:100vh"></iframe></body></html>`)
     w.document.close()
   }else{
@@ -6588,6 +6590,7 @@ async function imprimirOrc(id){
     }catch(err){console.warn('Erro ao buscar assinatura p/ impressão:',err)}
   }
   if(!w)return
+  w.document.open()
   w.document.write(docHead('ORÇAMENTO')+
     `<div style="display:flex;justify-content:space-between;align-items:flex-end;padding:18px 0 14px;border-bottom:2px solid #C4B09A;margin-bottom:16px">
       <div>
