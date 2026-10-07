@@ -8015,7 +8015,12 @@ async function _fbInit(){
     _fbPanel('↻','Carregando dados...','var(--cara2)')
     const col=_orgCol('store')
     let updated=0
-    for(const key of _FB_KEYS){
+    // As 15 chaves eram buscadas uma por vez (await sequencial) - num celular/conexão lenta isso levava
+    // vários segundos pra terminar, e só depois disso _fbReady virava true. Nessa janela, qualquer "Salvar
+    // Dados" feito pelo usuário ficava esperando (ver _fbWrite) - se a pessoa recarregasse a página antes
+    // da janela fechar, a gravação pendente era simplesmente abandonada (perdida) pela navegação. Buscando
+    // tudo em paralelo (Promise.all) essa janela cai de ~15x o tempo de ida-e-volta pra ~1x.
+    await Promise.all(_FB_KEYS.map(async key=>{
       try{
         const snap=await col.doc(key).get()
         if(snap.exists){
@@ -8026,7 +8031,7 @@ async function _fbInit(){
           if(local){try{await col.doc(key).set({v:JSON.parse(local)})}catch(e){}}
         }
       }catch(e){}
-    }
+    }))
     if(updated>0){render(page);toast('☁️ Dados sincronizados do servidor!','ok')}
     _fbReady=true
     _fbPanel('☁','Conectado — sync ativo','rgba(120,220,120,1)')
