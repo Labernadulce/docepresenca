@@ -3479,7 +3479,12 @@ function salvarPgtos(){
   const vals=[...list.querySelectorAll('input')].map(el=>el.value.trim()).filter(Boolean)
   if(!vals.length){toast('Adicione ao menos uma forma de pagamento','err');return}
   DB.set(S.PGTOS,vals)
-  toast('Formas de pagamento salvas!','ok')
+  // "Salvar Dados" (topo da página) e este botão ficam na mesma tela de Minha Empresa e são fáceis de
+  // confundir - usuário real clicou neste pensando que salvava tudo (inclusive a Chave Pix) e perdia o
+  // que tinha digitado. Pra nunca mais depender de qual botão foi clicado, este também salva os dados
+  // gerais da empresa (nome, contato, chave pix etc) quando o formulário deles está na tela.
+  if(document.getElementById('eNome'))salvarEmpresa()
+  toast('Tudo salvo!','ok')
 }
 function pgtoRedefinir(){
   DB.set(S.PGTOS,_PGTOS_DEFAULT)
