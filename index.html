@@ -8225,8 +8225,16 @@ async function _pdvSyncFotos(){
   }catch(e){console.warn('Fotos sync:',e)}
 }
 
-function _fbWrite(key,val){
-  if(!_fbReady||!_fdb)return
+async function _fbWrite(key,val){
+  if(!_fdb)return
+  // Se a sincronização inicial (_fbInit) ainda não terminou, uma gravação feita agora era
+  // simplesmente descartada aqui (return cedo) - localStorage ficava com o valor novo, mas o
+  // Firestore nunca recebia nada. Ao recarregar a página, _fbInit via o doc remoto (antigo)
+  // já existindo e SOBRESCREVIA o local com ele, apagando silenciosamente o que o usuário
+  // acabou de digitar/salvar. Espera até ~12s a sincronização terminar antes de gravar.
+  let tentativas=0
+  while(!_fbReady&&tentativas<60){await new Promise(r=>setTimeout(r,200));tentativas++}
+  if(!_fbReady)return
   // JSON round-trip remove valores undefined que o Firestore não aceita
   const clean=JSON.parse(JSON.stringify(val===undefined?null:val))
   _orgCol('store').doc(key).set({v:clean}).catch(e=>console.warn('FB write:',e))
