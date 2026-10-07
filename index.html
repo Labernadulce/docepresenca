@@ -526,6 +526,14 @@ function planoPagamentoLinhasComStatus(plano){
   plano.parcelas.forEach(p=>linhas.push(`Parcela ${p.n}/${plano.parcelas.length}: ${fmt(p.valor)}${p.data?' — vencimento '+fmtDate(p.data):''} — ${st(p)}`))
   return linhas
 }
+// Linha "🔑 Chave Pix" mostrada junto da condição de pagamento (impressão e link do cliente) - só
+// aparece quando a empresa configurou a chave em Minha Empresa, senão não renderiza nada.
+function chavePixHtml(chave){
+  if(!chave)return''
+  return`<div style="margin-top:8px;padding-top:8px;border-top:1px dashed #DDD5C8;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+    <span>🔑 <strong>Chave Pix:</strong> ${chave}</span>
+  </div>`
+}
 // Campos de formulário (entrada + parcelamento com datas) - reaproveitado no orçamento e no contrato,
 // só muda o prefixo dos ids (evita duplicar esse bloco inteiro duas vezes).
 function condPagamentoFieldsHtml(prefix,o){
@@ -2151,6 +2159,7 @@ function excluirCont(id){
 function imprimirCont(id){
   const c=DB.get(S.CONTRATOS).find(x=>x.id===id);if(!c)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===c.cliId)||{}
+  const _chavePix=getEmpresa().chavePix
   const prods=DB.get(S.PRODUTOS)
   const orcs=DB.get(S.ORCAMENTOS)||[]
   const orcFb=c.orcId?orcs.find(x=>x.id===c.orcId):orcs.find(x=>x.cliId===c.cliId&&x.itens&&x.itens.length)
@@ -2172,14 +2181,15 @@ function imprimirCont(id){
       <tbody>${rows}</tbody>
     </table>
     <div class="total-row"><span>VALOR TOTAL</span><span>${fmt(c.totalF)}</span></div>
-    ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?`<div style="padding:10px 12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none;font-size:12px">${planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}</div>`
-      :(c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Saldo a Pagar</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>`:'')}`
+    ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?`<div style="padding:10px 12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none;font-size:12px">${planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}${chavePixHtml(_chavePix)}</div>`
+      :(c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Saldo a Pagar</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>${_chavePix?`<div style="padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none">${chavePixHtml(_chavePix)}</div>`:''}`:'')}`
   }else{
     prodBlock=`<div style="margin:14px 0;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:13px">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Valor do Contrato</div>
       <div style="font-size:20px;font-weight:700;color:#3D3028">${fmt(c.totalF)}</div>
       ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-top:4px;font-size:12px;color:#6A5E52">${l}</div>`).join('')
         :(c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; Saldo: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:'')}
+      ${chavePixHtml(_chavePix)}
     </div>`
   }
   const clausulas=[
@@ -3430,6 +3440,7 @@ function empresaHTML(){
     <div class="fg"><label>Email</label><input id="eEmail" value="${e.email||''}" placeholder="contato@empresa.com"></div></div>
     <div class="frow"><div class="fg"><label>Site / Instagram</label><input id="eSite" value="${e.site||''}" placeholder="www.docearte.com.br"></div>
     <div class="fg"><label>WhatsApp (para links de cliente)</label><input id="eWa" value="${e.wa||''}" placeholder="5511999999999"></div></div>
+    <div class="fg"><label>Chave Pix <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece na condição de pagamento de orçamentos e contratos</span></label><input id="eChavePix" value="${e.chavePix||''}" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
     <div class="fg"><label>Slogan / Observação no rodapé</label><textarea id="eObs" placeholder="Especializada em bolos artesanais e doces finos...">${e.obs||''}</textarea></div>
   </div>
   <div class="card" style="margin-top:16px">
@@ -3476,7 +3487,7 @@ function pgtoRedefinir(){
   toast('Formas de pagamento redefinidas','ok')
 }
 function salvarEmpresa(){
-  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),obs:v('eObs')}
+  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),chavePix:v('eChavePix'),obs:v('eObs')}
   DB.set(S.EMPRESA,e);toast('Dados da empresa salvos!','ok')
   renderSlogoInfo()
 }
@@ -6530,6 +6541,7 @@ async function confirmarRomaneioRecebimento(){
 async function imprimirOrc(id){
   const o=DB.get(S.ORCAMENTOS).find(x=>x.id===id);if(!o)return
   const cli=DB.get(S.CLIENTES).find(x=>x.id===o.cliId)||{}
+  const e=getEmpresa()
   const prods=DB.get(S.PRODUTOS)
   const getCat=pId=>{if(!pId||pId==='_custom')return'Personalizado';const p=prods.find(x=>x.id===pId);return p&&p.cat?p.cat:'Outros'}
   const getNomeProd=it=>{if(!it.pId||it.pId==='_custom')return it.nome||it.desc||'';const _p=prods.find(x=>x.id===it.pId);return _p?_p.nome:(it.nome||it.desc||'')}
@@ -6624,6 +6636,7 @@ async function imprimirOrc(id){
     ${(o.entradaPct||o.parcelas)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
       ${(Array.isArray(o.parcelasPlano)?planoPagamentoLinhasComStatus({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData,pago:o.entradaPaga}:null,parcelas:o.parcelasPlano}):[condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+      ${chavePixHtml(e.chavePix)}
     </div>`:''}
     ${cliBlock(cli)}
     ${prodBlockHtml}`
@@ -6736,7 +6749,7 @@ async function gerarLinkOrc(id){
   const p={tp:'orc'}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
-  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa
+  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix
   const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   if(_ea)p.ea=_ea
   p.i=orcNumFmt(o);p.dt=o.data;p.v=o.validade
@@ -6896,15 +6909,15 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
+  let nome,er,ea,ef,ee,ew,px,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
   if(raw.o){
     const {o,cli,e}=raw
-    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||''
+    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
     nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano;entradaPaga=!!o.entradaPaga
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
-    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||''
+    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
     nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp;entradaPaga=!!raw.epg
     itens=(raw.it||[]).map(x=>{
@@ -6948,6 +6961,7 @@ function showClientView(raw,docId){
   const _planoPagHtml=(entradaPct||parcelas>1)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
     ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
+    ${chavePixHtml(px)}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
@@ -7191,7 +7205,7 @@ async function gerarLinkCont(id){
   const _ea=[[emp.end||'',emp.bairro||''].filter(Boolean).join(', '),[emp.cidade?(emp.cidade+(emp.estado?' / '+emp.estado:'')):'',emp.cep?'CEP: '+emp.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   const payload={
     tp:'c',
-    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',
+    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
@@ -7369,6 +7383,7 @@ function showContView(d){
         &nbsp;&nbsp;|&nbsp;&nbsp;${(d.pc||1)>1?`Saldo em ${d.pc}x de <strong>${fmt((saldo<0?0:saldo)/d.pc)}</strong>`:`Saldo na entrega: <strong>${fmt(saldo<0?0:saldo)}</strong>`}
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
+      ${chavePixHtml(d.px)}
       <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
