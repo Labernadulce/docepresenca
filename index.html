@@ -629,20 +629,30 @@ function _alvoDevidoAgora(entradaValor,entradaPaga,parcelasPlano){
 }
 // Dá baixa de verdade no orçamento/contrato local (e sincroniza pro Firestore via DB.set, igual
 // qualquer outra alteração no app) quando o InfinitePay confirma que a entrada/parcela foi paga.
-function _ipDarBaixa(tipo,recordId,alvo){
+function _ipDarBaixa(tipo,recordId,alvo,valor){
   if(!recordId||alvo==null)return
   const key=tipo==='cont'?S.CONTRATOS:S.ORCAMENTOS
   const list=DB.get(key)||[]
   const i=list.findIndex(x=>x.id===recordId)
   if(i<0)return
+  const rec=list[i]
+  let jaEstavaPago=false
   if(alvo==='entrada'){
-    list[i].entradaPaga=true
-  }else if(typeof alvo==='number'&&Array.isArray(list[i].parcelasPlano)&&list[i].parcelasPlano[alvo]){
-    list[i].parcelasPlano[alvo].pago=true
+    jaEstavaPago=!!rec.entradaPaga
+    rec.entradaPaga=true
+  }else if(typeof alvo==='number'&&Array.isArray(rec.parcelasPlano)&&rec.parcelasPlano[alvo]){
+    jaEstavaPago=!!rec.parcelasPlano[alvo].pago
+    rec.parcelasPlano[alvo].pago=true
   }else{
     return
   }
   DB.set(key,list)
+  // Mesmo lançamento automático no Financeiro que a marcação manual (Ver Parcelas) já faz - a baixa
+  // automática do InfinitePay não pode deixar o pagamento "invisível" lá.
+  if(!jaEstavaPago&&valor>0){
+    const ref=tipo==='cont'?`Contrato Nº ${rec.num||''}`:`Orç. ${orcNumFmt(rec)}`
+    _lancarPagamentoFinanceiro(valor,today(),`Pagamento via InfinitePay — ${clienteNome(rec.cliId)} (${ref})`,recordId)
+  }
 }
 // Botão "Gerar link de pagamento" mostrado só nas telas vivas (link do cliente) - não entra nas
 // impressões estáticas (imprimirOrc/imprimirCont), que abrem numa janela popup separada sem acesso
@@ -674,7 +684,7 @@ async function _ipIniciarPagamento(handle,orderNsu,valorCobrado,desc,tipo,record
         const r=await _ipChecarPagamento(handle,orderNsu)
         const st=document.getElementById('ipPayStatus')
         if(r.paid){
-          _ipDarBaixa(tipo,recordId,alvo)
+          _ipDarBaixa(tipo,recordId,alvo,valorCobrado)
           if(st){st.textContent=alvo!=null?'✅ Pagamento confirmado! Baixa registrada automaticamente.':'✅ Pagamento confirmado!';st.style.color='#2E7D32'}
           clearInterval(_ipPollTimer)
         }
@@ -1913,23 +1923,40 @@ function verParcelasOrc(id){
   openModal('📋 Parcelas — '+clienteNome(o.cliId),body,
     body?`<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarParcelasOrc('${id}')">Salvar</button>`:`<button class="btn btn-s" onclick="closeModal()">Fechar</button>`)
 }
+// Lança no Financeiro (igual uma Venda gerada) sempre que uma entrada/parcela passa de pendente pra
+// paga - sem isso, marcar "Pago" em Ver Parcelas (manual) ou a baixa automática do InfinitePay nunca
+// apareciam no Financeiro, mesmo o dinheiro tendo entrado de verdade. Bug real relatado pelo usuário:
+// cliente pagou 50% de entrada, não tinha onde registrar isso nem aparecia no Financeiro.
+function _lancarPagamentoFinanceiro(valor,data,desc,ref){
+  if(!(valor>0))return
+  const trans=DB.get(S.TRANS)
+  trans.push({id:genId(),tipo:'entrada',cat:'Venda',desc,val:valor,data:data||today(),pgto:'Pix',ref})
+  DB.set(S.TRANS,trans)
+}
 function salvarParcelasOrc(id){
   const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id);if(i<0)return
   const o=orcs[i]
+  const novosPagos=[]
   if(o.entradaPct){
-    o.entradaData=(document.getElementById('poData_entrada')||{}).value||o.entradaData
-    o.entradaPaga=!!(document.getElementById('poPago_entrada')||{}).checked
+    const novaData=(document.getElementById('poData_entrada')||{}).value||o.entradaData
+    const novoPago=!!(document.getElementById('poPago_entrada')||{}).checked
+    if(novoPago&&!o.entradaPaga)novosPagos.push({valor:o.totalF*o.entradaPct/100,data:novaData,desc:`Entrada — ${clienteNome(o.cliId)} (Orç. ${orcNumFmt(o)})`})
+    o.entradaData=novaData
+    o.entradaPaga=novoPago
   }
   if(Array.isArray(o.parcelasPlano)&&o.parcelasPlano.length){
-    o.parcelasPlano=o.parcelasPlano.map((p,idx)=>({...p,
-      data:(document.getElementById('poData_'+idx)||{}).value||p.data,
-      pago:!!(document.getElementById('poPago_'+idx)||{}).checked
-    }))
+    o.parcelasPlano=o.parcelasPlano.map((p,idx)=>{
+      const novaData=(document.getElementById('poData_'+idx)||{}).value||p.data
+      const novoPago=!!(document.getElementById('poPago_'+idx)||{}).checked
+      if(novoPago&&!p.pago)novosPagos.push({valor:p.valor,data:novaData,desc:`Parcela ${p.n}/${o.parcelasPlano.length} — ${clienteNome(o.cliId)} (Orç. ${orcNumFmt(o)})`})
+      return{...p,data:novaData,pago:novoPago}
+    })
   }
   DB.set(S.ORCAMENTOS,orcs)
+  novosPagos.forEach(np=>_lancarPagamentoFinanceiro(np.valor,np.data,np.desc,o.id))
   closeModal()
   renderOrcTable()
-  toast('Parcelas atualizadas!','ok')
+  toast(novosPagos.length?'Parcelas atualizadas e lançadas no Financeiro!':'Parcelas atualizadas!','ok')
 }
 function statusOrc(id,status){
   const orcs=DB.get(S.ORCAMENTOS);const i=orcs.findIndex(x=>x.id===id);if(i<0)return
@@ -2298,23 +2325,30 @@ function verParcelasCont(id){
 function salvarParcelasCont(id){
   const conts=DB.get(S.CONTRATOS);const i=conts.findIndex(x=>x.id===id);if(i<0)return
   const c=conts[i]
+  const novosPagos=[]
   if(c.entrada>0){
-    c.entradaData=(document.getElementById('pcData_entrada')||{}).value||c.entradaData
-    c.entradaPaga=!!(document.getElementById('pcPago_entrada')||{}).checked
+    const novaData=(document.getElementById('pcData_entrada')||{}).value||c.entradaData
+    const novoPago=!!(document.getElementById('pcPago_entrada')||{}).checked
+    if(novoPago&&!c.entradaPaga)novosPagos.push({valor:c.entrada,data:novaData,desc:`Entrada — ${clienteNome(c.cliId)} (Contrato Nº ${c.num||''})`})
+    c.entradaData=novaData
+    c.entradaPaga=novoPago
   }
   if(Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length){
-    c.parcelasPlano=c.parcelasPlano.map((p,idx)=>({...p,
-      data:(document.getElementById('pcData_'+idx)||{}).value||p.data,
-      pago:!!(document.getElementById('pcPago_'+idx)||{}).checked
-    }))
+    c.parcelasPlano=c.parcelasPlano.map((p,idx)=>{
+      const novaData=(document.getElementById('pcData_'+idx)||{}).value||p.data
+      const novoPago=!!(document.getElementById('pcPago_'+idx)||{}).checked
+      if(novoPago&&!p.pago)novosPagos.push({valor:p.valor,data:novaData,desc:`Parcela ${p.n}/${c.parcelasPlano.length} — ${clienteNome(c.cliId)} (Contrato Nº ${c.num||''})`})
+      return{...p,data:novaData,pago:novoPago}
+    })
     // saldoPago (usado no resumo/comprovante) passa a refletir "todas as parcelas pagas".
     c.saldoPago=c.parcelasPlano.every(p=>p.pago)
   }
   DB.set(S.CONTRATOS,conts)
+  novosPagos.forEach(np=>_lancarPagamentoFinanceiro(np.valor,np.data,np.desc,c.id))
   if(_fdb)_orgCol('contratos_pub').doc(id).set({pd:!!c.entradaPaga,sd:!!c.saldoPago,pp:c.parcelasPlano||[]},{merge:true}).catch(()=>{})
   closeModal()
   renderContTable()
-  toast('Parcelas atualizadas!','ok')
+  toast(novosPagos.length?'Parcelas atualizadas e lançadas no Financeiro!':'Parcelas atualizadas!','ok')
 }
 function excluirCont(id){
   if(!confirm('Excluir este contrato?'))return
