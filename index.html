@@ -532,10 +532,53 @@ function _qrCodeUrl(data,size){
   size=size||100
   return`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&data=${encodeURIComponent(data)}`
 }
+// Payload real do Pix (padrão EMV/BR Code) - um QR Pix de verdade NÃO pode só codificar a chave crua
+// (isso é rejeitado como "QRCode Inválido" por qualquer app de banco); precisa desse formato TLV com
+// nome/cidade do recebedor e um checksum CRC16 no final. Mesma lógica já testada e usada de verdade
+// no projeto AJF Academia de Goleiros (src/lib/pix.ts), só portada de TS pra JS puro aqui.
+function _pixTlv(id,value){return id+String(value.length).padStart(2,'0')+value}
+function _pixCrc16(str){
+  let crc=0xffff
+  for(let i=0;i<str.length;i++){
+    crc^=str.charCodeAt(i)<<8
+    for(let j=0;j<8;j++){crc=crc&0x8000?(crc<<1)^0x1021:crc<<1}
+  }
+  return(crc&0xffff).toString(16).toUpperCase().padStart(4,'0')
+}
+// O payload exige texto só em ASCII maiúsculo (sem acento) e com limite de tamanho por campo -
+// remove acentuação, filtra caracteres fora do padrão e corta no tamanho máximo permitido.
+function _pixSanitize(str,maxLen){
+  // NFD separa a letra do acento (ex: "é" -> "e" + acento combinável); o filtro seguinte já descarta
+  // qualquer coisa fora de A-Z/0-9/espaço, incluindo esse acento combinável sobrando - não precisa de
+  // uma segunda regex específica pra faixa Unicode dos acentos.
+  const s=(str||'').normalize('NFD').replace(/[^A-Za-z0-9 ]/g,'').toUpperCase().trim()
+  return s.slice(0,maxLen)||'NA'
+}
+function generatePixPayload(key,amount,merchantName,city){
+  const merchantAccount=_pixTlv('26',_pixTlv('00','br.gov.bcb.pix')+_pixTlv('01',key))
+  const additionalData=_pixTlv('62',_pixTlv('05','***'))
+  const parts=[
+    _pixTlv('00','01'),
+    merchantAccount,
+    _pixTlv('52','0000'),
+    _pixTlv('53','986'),
+    ...(amount!=null?[_pixTlv('54',Number(amount).toFixed(2))]:[]),
+    _pixTlv('58','BR'),
+    _pixTlv('59',_pixSanitize(merchantName,25)),
+    _pixTlv('60',_pixSanitize(city||'BRASIL',15)),
+    additionalData,
+    '6304',
+  ]
+  const payload=parts.join('')
+  return payload+_pixCrc16(payload)
+}
 // Caixa "Pagamento via Pix" com cabeçalho, chave copia-e-cola e QR code - mesmo formato usado no
 // sistema Gestão (AccertTech), com as cores/tipografia próprias do Doce Presença (dourado/serifada).
-function chavePixHtml(chave,favorecido,banco){
+// O texto mostrado pro usuário copiar continua sendo a chave crua (mais fácil de ler/digitar) - só o
+// QR em si é que precisa ser o payload EMV completo pra ser reconhecido como Pix de verdade ao escanear.
+function chavePixHtml(chave,favorecido,banco,merchantName,city){
   if(!chave)return''
+  const qrData=generatePixPayload(chave,undefined,merchantName||'PAGAMENTO',city)
   return`<div style="margin-top:14px;border:1.5px solid #DDD5C8;border-radius:6px;overflow:hidden">
     <div style="background:#B8912A;color:#fff;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.6px;padding:8px 14px">Pagamento via Pix</div>
     <div style="display:flex;gap:18px;padding:14px 16px;align-items:center;flex-wrap:wrap">
@@ -545,7 +588,7 @@ function chavePixHtml(chave,favorecido,banco){
         ${favorecido?`<div style="margin-top:8px;font-size:11.5px;color:#5A4A3A">Favorecido: ${favorecido}</div>`:''}
         ${banco?`<div style="margin-top:2px;font-size:11.5px;color:#5A4A3A">Banco: ${banco}</div>`:''}
       </div>
-      <img src="${_qrCodeUrl(chave,100)}" width="100" height="100" alt="QR Code Pix" style="flex-shrink:0;border-radius:4px;border:1px solid #DDD5C8">
+      <img src="${_qrCodeUrl(qrData,100)}" width="100" height="100" alt="QR Code Pix" style="flex-shrink:0;border-radius:4px;border:1px solid #DDD5C8">
     </div>
   </div>`
 }
@@ -2176,6 +2219,7 @@ function imprimirCont(id){
   const cli=DB.get(S.CLIENTES).find(x=>x.id===c.cliId)||{}
   const _empPix=getEmpresa()
   const _chavePix=_empPix.chavePix,_favorecidoPix=_empPix.pixFavorecido,_bancoPix=_empPix.pixBanco
+  const _nomePix=_empPix.fantasia||_empPix.nome,_cidadePix=_empPix.cidade
   const prods=DB.get(S.PRODUTOS)
   const orcs=DB.get(S.ORCAMENTOS)||[]
   const orcFb=c.orcId?orcs.find(x=>x.id===c.orcId):orcs.find(x=>x.cliId===c.cliId&&x.itens&&x.itens.length)
@@ -2197,15 +2241,15 @@ function imprimirCont(id){
       <tbody>${rows}</tbody>
     </table>
     <div class="total-row"><span>VALOR TOTAL</span><span>${fmt(c.totalF)}</span></div>
-    ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?`<div style="padding:10px 12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none;font-size:12px">${planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix)}</div>`
-      :(c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Saldo a Pagar</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>${_chavePix?`<div style="padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none">${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix)}</div>`:''}`:'')}`
+    ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?`<div style="padding:10px 12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none;font-size:12px">${planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix,_nomePix,_cidadePix)}</div>`
+      :(c.entrada>0?`<div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Entrada / Sinal</span><span style="font-weight:700;color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} — ${c.entradaPaga?'PAGO':'PENDENTE'}</span></div><div style="display:flex;justify-content:space-between;padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none"><span>Saldo a Pagar</span><span style="font-weight:700;color:${c.saldoPago?'#2E7D32':'#C4724A'}">${fmt(c.totalF-c.entrada)} — ${c.saldoPago?'PAGO':'PENDENTE'}</span></div>${_chavePix?`<div style="padding:7px 12px;font-size:12px;background:#F5EFE8;border:1px solid #DDD5C8;border-top:none">${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix,_nomePix,_cidadePix)}</div>`:''}`:'')}`
   }else{
     prodBlock=`<div style="margin:14px 0;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:13px">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Valor do Contrato</div>
       <div style="font-size:20px;font-weight:700;color:#3D3028">${fmt(c.totalF)}</div>
       ${Array.isArray(c.parcelasPlano)&&c.parcelasPlano.length?planoPagamentoLinhasComStatus({entrada:c.entrada>0?{valor:c.entrada,data:c.entradaData,pago:c.entradaPaga}:null,parcelas:c.parcelasPlano}).map(l=>`<div style="margin-top:4px;font-size:12px;color:#6A5E52">${l}</div>`).join('')
         :(c.entrada>0?`<div style="margin-top:6px;font-size:12px;color:#6A5E52">Entrada: <strong style="color:${c.entradaPaga?'#2E7D32':'#B05000'}">${fmt(c.entrada)} (${c.entradaPaga?'Pago':'Pendente'})</strong>${c.entradaData?' até '+fmtDate(c.entradaData):''} &nbsp;|&nbsp; Saldo: <strong style="color:${c.saldoPago?'#2E7D32':'#B05000'}">${fmt(c.totalF-c.entrada)} (${c.saldoPago?'Pago':'Pendente'})</strong></div>`:'')}
-      ${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix)}
+      ${chavePixHtml(_chavePix,_favorecidoPix,_bancoPix,_nomePix,_cidadePix)}
     </div>`
   }
   const clausulas=[
@@ -6659,7 +6703,7 @@ async function imprimirOrc(id){
     ${(o.entradaPct||o.parcelas)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
       <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
       ${(Array.isArray(o.parcelasPlano)?planoPagamentoLinhasComStatus({entrada:o.entradaPct?{valor:o.totalF*o.entradaPct/100,data:o.entradaData,pago:o.entradaPaga}:null,parcelas:o.parcelasPlano}):[condPagamentoTxt(o.totalF,o.entradaPct,o.parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
-      ${chavePixHtml(e.chavePix,e.pixFavorecido,e.pixBanco)}
+      ${chavePixHtml(e.chavePix,e.pixFavorecido,e.pixBanco,e.fantasia||e.nome,e.cidade)}
     </div>`:''}
     ${cliBlock(cli)}
     ${prodBlockHtml}`
@@ -6772,7 +6816,7 @@ async function gerarLinkOrc(id){
   const p={tp:'orc'}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
-  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco
+  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco;if(e.cidade)p.pxc=e.cidade
   const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   if(_ea)p.ea=_ea
   p.i=orcNumFmt(o);p.dt=o.data;p.v=o.validade
@@ -6932,15 +6976,15 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,px,pxf,pxb,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
+  let nome,er,ea,ef,ee,ew,px,pxf,pxb,pxc,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
   if(raw.o){
     const {o,cli,e}=raw
-    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||''
+    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||'';pxc=e.cidade||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
     nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano;entradaPaga=!!o.entradaPaga
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
-    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||''
+    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||'';pxc=raw.pxc||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
     nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp;entradaPaga=!!raw.epg
     itens=(raw.it||[]).map(x=>{
@@ -6984,7 +7028,7 @@ function showClientView(raw,docId){
   const _planoPagHtml=(entradaPct||parcelas>1)?`<div style="margin-bottom:16px;padding:12px 16px;background:#FAF7F4;border:1px solid #DDD5C8;border-radius:4px;font-size:12px;color:#5A4A3A">
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
     ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
-    ${chavePixHtml(px,pxf,pxb)}
+    ${chavePixHtml(px,pxf,pxb,nome,pxc)}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
@@ -7228,7 +7272,7 @@ async function gerarLinkCont(id){
   const _ea=[[emp.end||'',emp.bairro||''].filter(Boolean).join(', '),[emp.cidade?(emp.cidade+(emp.estado?' / '+emp.estado:'')):'',emp.cep?'CEP: '+emp.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   const payload={
     tp:'c',
-    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',
+    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',pxc:emp.cidade||'',
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
@@ -7406,7 +7450,7 @@ function showContView(d){
         &nbsp;&nbsp;|&nbsp;&nbsp;${(d.pc||1)>1?`Saldo em ${d.pc}x de <strong>${fmt((saldo<0?0:saldo)/d.pc)}</strong>`:`Saldo na entrega: <strong>${fmt(saldo<0?0:saldo)}</strong>`}
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
-      ${chavePixHtml(d.px,d.pxf,d.pxb)}
+      ${chavePixHtml(d.px,d.pxf,d.pxb,d.n,d.pxc)}
       <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
