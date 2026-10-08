@@ -2465,6 +2465,7 @@ function editCli(id){
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarCli()">Salvar</button>`)
 }
 function cliForm(c){
+  const statusOpts=Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${c.statusAtendimento===k?'selected':''}>${v.label}</option>`).join('')
   return`
   <div class="frow"><div class="fg"><label>Nome Completo *</label><input id="cNome" value="${c.nome||''}" placeholder="Nome do cliente"></div>
   <div class="fg"><label>Cpf</label><input id="cCpf" value="${c.cpf||''}" placeholder="000.000.000-00"></div></div>
@@ -2473,12 +2474,23 @@ function cliForm(c){
   <div class="fg"><label>Endereço</label><input id="cEnd" value="${c.end||''}" placeholder="Rua, número, bairro"></div>
   <div class="frow"><div class="fg"><label>Cep</label><input id="cCep" value="${c.cep||''}" placeholder="00000-000"></div>
   <div class="fg"><label>Cidade</label><input id="cCidade" value="${c.cidade||''}" placeholder="São Paulo"></div></div>
-  <div class="fg"><label>Observações</label><textarea id="cObs" placeholder="Alergias, preferências...">${c.obs||''}</textarea></div>`
+  <div class="fg"><label>Observações</label><textarea id="cObs" placeholder="Alergias, preferências...">${c.obs||''}</textarea></div>
+  <div class="divider" style="height:1px;background:var(--cream2);margin:14px 0"></div>
+  <div class="card-title" style="margin-bottom:10px">Contato Comercial</div>
+  <div class="frow"><div class="fg"><label>Status do Atendimento</label><select id="cStatusAtendimento">${statusOpts}</select></div>
+  <div class="fg"><label>Horário do Atendimento</label><input id="cHorarioAtendimento" type="time" value="${c.horarioAtendimento||''}"></div></div>
+  <div class="frow"><div class="fg"><label>Data do Contato</label><input id="cDataContato" type="date" value="${c.dataContato||''}"></div>
+  <div class="fg"><label>Data do Evento</label><input id="cDataEventoCli" type="date" value="${c.dataEventoCli||''}"></div></div>
+  <div class="frow"><div class="fg"><label>Nº da Proposta</label><input id="cNumProposta" value="${c.numProposta||''}" placeholder="Ex: 230812"></div>
+  <div class="fg" style="justify-content:flex-end;display:flex;flex-direction:column"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--txt2);height:40px"><input type="checkbox" id="cPropostaEnviada" ${c.propostaEnviada?'checked':''} style="width:17px;height:17px;accent-color:var(--ok)">Proposta já enviada</label></div></div>`
 }
 function salvarCli(){
   const nome=(document.getElementById('cNome')||{}).value||''
   if(!nome.trim()){toast('Informe o nome do cliente','err');return}
-  const c={id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:editId?(DB.get(S.CLIENTES).find(x=>x.id===editId)||{}).dt||today():today()}
+  const c={id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:editId?(DB.get(S.CLIENTES).find(x=>x.id===editId)||{}).dt||today():today(),
+    statusAtendimento:v('cStatusAtendimento'),horarioAtendimento:v('cHorarioAtendimento'),
+    dataContato:v('cDataContato'),dataEventoCli:v('cDataEventoCli'),
+    numProposta:v('cNumProposta'),propostaEnviada:!!(document.getElementById('cPropostaEnviada')||{}).checked}
   const clis=DB.get(S.CLIENTES);if(editId){const i=clis.findIndex(x=>x.id===editId);if(i>=0)clis[i]=c}else clis.push(c)
   DB.set(S.CLIENTES,clis);closeModal();toast(editId?'Cliente atualizado!':'Cliente cadastrado!','ok');render('clientes')
 }
