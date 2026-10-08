@@ -2487,7 +2487,12 @@ function cliForm(c){
 function salvarCli(){
   const nome=(document.getElementById('cNome')||{}).value||''
   if(!nome.trim()){toast('Informe o nome do cliente','err');return}
-  const c={id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:editId?(DB.get(S.CLIENTES).find(x=>x.id===editId)||{}).dt||today():today(),
+  // Parte de um registro existente (quando editando) e só sobrescreve os campos deste formulário -
+  // assim qualquer campo que o form não conhece (ex: capturadoVia, vindo da tela de Captação) não se
+  // perde silenciosamente numa edição comum. Bug real encontrado: editar um cliente vindo da Captação
+  // apagava a marcação "capturadoVia" e ele sumia da lista "Captados hoje", mesmo com os dados intactos.
+  const existente=editId?(DB.get(S.CLIENTES).find(x=>x.id===editId)||{}):{}
+  const c={...existente,id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:existente.dt||today(),
     statusAtendimento:v('cStatusAtendimento'),horarioAtendimento:v('cHorarioAtendimento'),
     dataContato:v('cDataContato'),dataEventoCli:v('cDataEventoCli'),
     numProposta:v('cNumProposta'),propostaEnviada:!!(document.getElementById('cPropostaEnviada')||{}).checked}
