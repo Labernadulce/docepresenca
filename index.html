@@ -2525,16 +2525,32 @@ function captacaoHTML(){
       <div class="fg"><label>Estado</label><input id="capEstado" placeholder="UF" maxlength="2" style="text-transform:uppercase"></div>
     </div>
     <div class="fg"><label>Email</label><input id="capEmail" placeholder="email@exemplo.com" type="email"></div>
-    <div class="fg"><label>Data do Evento</label><input id="capDataEvento" type="date"></div>
+    <div class="frow">
+      <div class="fg"><label>Data do Contato</label><input id="capDataContato" type="date" value="${today()}"></div>
+      <div class="fg"><label>Data do Evento</label><input id="capDataEvento" type="date"></div>
+    </div>
+    <div class="frow">
+      <div class="fg"><label>Nº da Proposta</label><input id="capNumProposta" placeholder="Ex: 230812"></div>
+      <div class="fg" style="justify-content:flex-end;display:flex;flex-direction:column"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--txt2);height:40px"><input type="checkbox" id="capPropostaEnviada" style="width:17px;height:17px;accent-color:var(--ok)">Proposta já enviada</label></div>
+    </div>
     <div class="fg"><label>Produtos / Anotações da ligação</label><textarea id="capNotas" rows="4" placeholder="O que a cliente quer, preferências, observações da conversa..."></textarea></div>
     <button class="btn btn-p" style="width:100%" onclick="salvarCaptacao()">💾 Salvar Cliente</button>
   </div>
   ${hoje.length?`<div class="card" style="max-width:560px;margin-top:16px">
     <div class="card-title">Captados hoje (${hoje.length})</div>
     ${hoje.map(c=>{const st=CAPTACAO_STATUS[c.statusAtendimento]||CAPTACAO_STATUS.em_conversa
+      const linha2=[c.fone?`📞 ${c.fone}`:'',c.email?`✉️ ${c.email}`:''].filter(Boolean).join('  ·  ')
+      const linha3=[c.dataContato?`📅 Contato: ${fmtDate(c.dataContato)}`:'',c.numProposta?`📄 Proposta Nº ${c.numProposta} — ${c.propostaEnviada?'✅ enviada':'⏳ não enviada'}`:''].filter(Boolean).join('  ·  ')
       return`<div style="padding:9px 0;border-bottom:1px solid var(--cream2);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <div><strong>${c.nome}</strong>${c.horarioAtendimento?` · ${c.horarioAtendimento}`:''}<br><span style="color:var(--txt2);font-size:12px">${c.fone||''}${c.fone&&c.email?' · ':''}${c.email||''}</span></div>
-        <select onchange="captacaoAtualizarStatus('${c.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid ${st.cor}33;background:${st.bg};color:${st.cor};cursor:pointer">${statusOptsHtml(c.statusAtendimento||'em_conversa')}</select>
+        <div>
+          <strong>${c.nome}</strong>${c.horarioAtendimento?` · ${c.horarioAtendimento}`:''}
+          ${linha2?`<br><span style="color:var(--txt2);font-size:12px">${linha2}</span>`:''}
+          ${linha3?`<br><span style="color:var(--txt3);font-size:11.5px">${linha3}</span>`:''}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <select onchange="captacaoAtualizarStatus('${c.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid ${st.cor}33;background:${st.bg};color:${st.cor};cursor:pointer">${statusOptsHtml(c.statusAtendimento||'em_conversa')}</select>
+          <button class="btn-ic" title="Editar cadastro completo" onclick="editCli('${c.id}')" style="flex-shrink:0">✏️</button>
+        </div>
       </div>`}).join('')}
   </div>`:''}`
 }
@@ -2576,7 +2592,10 @@ function salvarCaptacao(){
     end:v('capEnd'),cep:v('capCep'),
     cidade:[v('capCidade'),v('capEstado')].filter(Boolean).join('/'),
     obs:obsPartes.join('\n'),dt:today(),capturadoVia:'captacao',
-    statusAtendimento:v('capStatus')||'em_conversa',horarioAtendimento:v('capHorario')
+    statusAtendimento:v('capStatus')||'em_conversa',horarioAtendimento:v('capHorario'),
+    dataContato:v('capDataContato')||today(),
+    numProposta:v('capNumProposta'),
+    propostaEnviada:!!(document.getElementById('capPropostaEnviada')||{}).checked
   }
   const clis=DB.get(S.CLIENTES);clis.push(c);DB.set(S.CLIENTES,clis)
   toast('Cliente salvo! Pronto pra próxima ligação.','ok')
