@@ -292,6 +292,10 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M3 21v-1a6 6 0 0112 0v1M16 3.13a4 4 0 010 7.75M21 21v-1a4 4 0 00-3-3.87" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       Clientes
     </div>
+    <div class="ni" data-page="captacao" onclick="navigate('captacao')">
+      <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Captação
+    </div>
     <div class="snav-lbl">Estoque</div>
     <div class="ni" data-page="estoque" onclick="navigate('estoque')">
       <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M20 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1zM16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 12v4M10 14h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
@@ -403,6 +407,7 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
     <div class="page" id="page-vendas"></div>
     <div class="page" id="page-orcamentos"></div>
     <div class="page" id="page-clientes"></div>
+    <div class="page" id="page-captacao"></div>
     <div class="page" id="page-estoque"></div>
     <div class="page" id="page-compras"></div>
     <div class="page" id="page-financeiro"></div>
@@ -433,7 +438,7 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
 <script>
 // ===== CONSTANTS =====
 const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc',COMPRAS:'ds_cmp',TRANS:'ds_trn',OS:'ds_os',EMPRESA:'ds_emp',RECEITAS:'ds_rec',PRODUCOES:'ds_producoes',RECSTATUS:'ds_rec_status',CONTRATOS:'ds_cont',PGTOS:'ds_pgtos',CURSOS:'ds_cursos',DOCS:'ds_docs'}
-const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção',cursos:'Cursos',documentacao:'Documentação'}
+const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',captacao:'Captação',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção',cursos:'Cursos',documentacao:'Documentação'}
 
 // ===== DB =====
 // Cada empresa (tenant) tem suas proprias chaves de localStorage, prefixadas pelo slug da URL (?empresa=)
@@ -1059,6 +1064,7 @@ function render(p){
     case'vendas':el.innerHTML=vendasHTML();bindVendas();break
     case'orcamentos':el.innerHTML=orcHTML();bindOrc();break
     case'clientes':el.innerHTML=cliHTML();bindCli();break
+    case'captacao':el.innerHTML=captacaoHTML();break
     case'estoque':el.innerHTML=estHTML();bindEst();break
     case'compras':el.innerHTML=cmpHTML();bindCmp();break
     case'financeiro':el.innerHTML=finHTML();bindFin();break
@@ -2482,6 +2488,75 @@ function excluirCli(id){
     DB.set(S.CLIENTES,DB.get(S.CLIENTES).filter(x=>x.id!==id))
     toast('Cliente excluído','ok');render('clientes')
   })
+}
+
+// ===== CAPTAÇÃO RÁPIDA (ligação ativa) =====
+// Tela enxuta pra cadastrar um cliente rápido durante uma ligação: nome, CEP (busca o endereço
+// sozinho via ViaCEP), email, telefone, data do evento e um campo livre pra anotações/produtos de
+// interesse. Salva como Cliente normal (data do evento + anotações viram parte do campo "obs", que
+// já é visível/editável na tela normal de Clientes depois).
+function captacaoHTML(){
+  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
+  return`
+  <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div></div>
+  <div class="card" style="max-width:560px">
+    <div class="fg"><label>Nome <span style="color:var(--bad)">*</span></label><input id="capNome" placeholder="Nome completo" autocomplete="off"></div>
+    <div class="frow">
+      <div class="fg"><label>CEP</label><input id="capCep" placeholder="00000-000" inputmode="numeric" oninput="captacaoBuscarCep(this.value)"></div>
+      <div class="fg"><label>Telefone</label><input id="capFone" placeholder="(11) 99999-9999" inputmode="tel"></div>
+    </div>
+    <div id="capCepStatus" style="font-size:11px;color:var(--txt3);margin:-8px 0 10px"></div>
+    <div class="fg"><label>Endereço</label><input id="capEnd" placeholder="Rua, número, bairro"></div>
+    <div class="frow">
+      <div class="fg"><label>Cidade</label><input id="capCidade" placeholder="Cidade"></div>
+      <div class="fg"><label>Estado</label><input id="capEstado" placeholder="UF" maxlength="2" style="text-transform:uppercase"></div>
+    </div>
+    <div class="fg"><label>Email</label><input id="capEmail" placeholder="email@exemplo.com" type="email"></div>
+    <div class="fg"><label>Data do Evento</label><input id="capDataEvento" type="date"></div>
+    <div class="fg"><label>Produtos / Anotações da ligação</label><textarea id="capNotas" rows="4" placeholder="O que a cliente quer, preferências, observações da conversa..."></textarea></div>
+    <button class="btn btn-p" style="width:100%" onclick="salvarCaptacao()">💾 Salvar Cliente</button>
+  </div>
+  ${hoje.length?`<div class="card" style="max-width:560px;margin-top:16px">
+    <div class="card-title">Captados hoje (${hoje.length})</div>
+    ${hoje.map(c=>`<div style="padding:8px 0;border-bottom:1px solid var(--cream2);font-size:13px"><strong>${c.nome}</strong><br><span style="color:var(--txt2);font-size:12px">${c.fone||''}${c.fone&&c.email?' · ':''}${c.email||''}</span></div>`).join('')}
+  </div>`:''}`
+}
+async function captacaoBuscarCep(valorDigitado){
+  const digitos=(valorDigitado||'').replace(/\D/g,'')
+  if(digitos.length!==8)return
+  const statusEl=document.getElementById('capCepStatus')
+  if(statusEl){statusEl.textContent='Buscando endereço...';statusEl.style.color='var(--txt3)'}
+  try{
+    const r=await fetch(`https://viacep.com.br/ws/${digitos}/json/`)
+    const d=await r.json()
+    if(d.erro){if(statusEl){statusEl.textContent='CEP não encontrado';statusEl.style.color='var(--bad)'}return}
+    const end=[d.logradouro,d.bairro].filter(Boolean).join(', ')
+    if(document.getElementById('capEnd'))document.getElementById('capEnd').value=end
+    if(document.getElementById('capCidade'))document.getElementById('capCidade').value=d.localidade||''
+    if(document.getElementById('capEstado'))document.getElementById('capEstado').value=d.uf||''
+    if(statusEl){statusEl.textContent='✓ Endereço preenchido automaticamente';statusEl.style.color='var(--ok)'}
+  }catch(e){
+    if(statusEl){statusEl.textContent='Não foi possível buscar o CEP agora (preencha manualmente)';statusEl.style.color='var(--bad)'}
+  }
+}
+function salvarCaptacao(){
+  const nome=(document.getElementById('capNome')||{}).value||''
+  if(!nome.trim()){toast('Informe o nome do cliente','err');return}
+  const dataEvento=(document.getElementById('capDataEvento')||{}).value||''
+  const notas=(document.getElementById('capNotas')||{}).value||''
+  const obsPartes=[]
+  if(dataEvento)obsPartes.push('Data do evento: '+fmtDate(dataEvento))
+  if(notas)obsPartes.push(notas)
+  const c={
+    id:genId(),nome:nome.trim(),cpf:'',
+    fone:v('capFone'),email:v('capEmail'),
+    end:v('capEnd'),cep:v('capCep'),
+    cidade:[v('capCidade'),v('capEstado')].filter(Boolean).join('/'),
+    obs:obsPartes.join('\n'),dt:today(),capturadoVia:'captacao'
+  }
+  const clis=DB.get(S.CLIENTES);clis.push(c);DB.set(S.CLIENTES,clis)
+  toast('Cliente salvo! Pronto pra próxima ligação.','ok')
+  render('captacao')
 }
 
 // ===== ESTOQUE =====
