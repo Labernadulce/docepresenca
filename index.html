@@ -610,23 +610,55 @@ function _valorDevidoAgora(totalF,entradaValor,entradaPaga,numParcelas,parcelasP
   if(numParcelas>1)return(totalF-(entradaValor||0))/numParcelas
   return totalF
 }
+// Diz QUAL parcela é a que está sendo cobrada agora (mesma lógica/ordem de _valorDevidoAgora) - usado
+// pra saber o que marcar como pago quando o pagamento for confirmado. 'entrada', um índice de parcela
+// dentro de parcelasPlano, ou null quando não há como identificar automaticamente (ex: parcelamento sem
+// detalhamento por parcela individual) - nesse caso a baixa automática simplesmente não acontece.
+function _alvoDevidoAgora(entradaValor,entradaPaga,parcelasPlano){
+  if(entradaValor>0&&!entradaPaga)return'entrada'
+  if(Array.isArray(parcelasPlano)&&parcelasPlano.length){
+    const idx=parcelasPlano.findIndex(p=>!p.pago)
+    if(idx>=0)return idx
+  }
+  return null
+}
+// Dá baixa de verdade no orçamento/contrato local (e sincroniza pro Firestore via DB.set, igual
+// qualquer outra alteração no app) quando o InfinitePay confirma que a entrada/parcela foi paga.
+function _ipDarBaixa(tipo,recordId,alvo){
+  if(!recordId||alvo==null)return
+  const key=tipo==='cont'?S.CONTRATOS:S.ORCAMENTOS
+  const list=DB.get(key)||[]
+  const i=list.findIndex(x=>x.id===recordId)
+  if(i<0)return
+  if(alvo==='entrada'){
+    list[i].entradaPaga=true
+  }else if(typeof alvo==='number'&&Array.isArray(list[i].parcelasPlano)&&list[i].parcelasPlano[alvo]){
+    list[i].parcelasPlano[alvo].pago=true
+  }else{
+    return
+  }
+  DB.set(key,list)
+}
 // Botão "Gerar link de pagamento" mostrado só nas telas vivas (link do cliente) - não entra nas
 // impressões estáticas (imprimirOrc/imprimirCont), que abrem numa janela popup separada sem acesso
-// às funções desta página. oid/desc só levam números/texto simples, sem aspas, seguro pro onclick inline.
-function _ipBotaoHtml(handle,orderNsu,totalF,desc){
+// às funções desta página. Os parâmetros só levam números/texto simples, sem aspas, seguro pro
+// onclick inline. alvo null vira a palavra `null` (sem aspas) direto no HTML - lido de volta como
+// JS null puro, não a string "null".
+function _ipBotaoHtml(handle,orderNsu,valorCobrado,desc,tipo,recordId,alvo){
   if(!handle)return''
+  const alvoJs=alvo==null?'null':(typeof alvo==='number'?alvo:`'${alvo}'`)
   return`<div style="margin-top:10px">
-    <button type="button" onclick="_ipIniciarPagamento('${handle}','${orderNsu}',${totalF},'${desc}')" style="width:100%;padding:11px;background:#6D28D9;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">💳 Gerar link de pagamento (InfinitePay)</button>
+    <button type="button" onclick="_ipIniciarPagamento('${handle}','${orderNsu}',${valorCobrado},'${desc}','${tipo}','${recordId}',${alvoJs})" style="width:100%;padding:11px;background:#6D28D9;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">💳 Gerar link de pagamento (InfinitePay)</button>
     <div id="ipPayBox" style="margin-top:8px"></div>
   </div>`
 }
 let _ipPollTimer=null
-async function _ipIniciarPagamento(handle,orderNsu,totalF,desc){
+async function _ipIniciarPagamento(handle,orderNsu,valorCobrado,desc,tipo,recordId,alvo){
   const box=document.getElementById('ipPayBox')
   if(!box)return
   box.innerHTML='<div style="font-size:12px;color:#8A7E6E">Gerando link de pagamento...</div>'
   try{
-    const resp=await _ipCriarLink(handle,[{quantity:1,price:Math.round(totalF*100),description:desc}],orderNsu)
+    const resp=await _ipCriarLink(handle,[{quantity:1,price:Math.round(valorCobrado*100),description:desc}],orderNsu)
     const url=resp.url||resp.checkout_url||resp.link||resp.payment_url
     if(!url)throw new Error('a InfinitePay não retornou um link')
     box.innerHTML=`<a href="${url}" target="_blank" rel="noreferrer" style="display:block;text-align:center;background:#6D28D9;color:#fff;font-weight:700;padding:12px;border-radius:8px;text-decoration:none;margin-bottom:8px">Abrir página de pagamento →</a>
@@ -637,7 +669,8 @@ async function _ipIniciarPagamento(handle,orderNsu,totalF,desc){
         const r=await _ipChecarPagamento(handle,orderNsu)
         const st=document.getElementById('ipPayStatus')
         if(r.paid){
-          if(st){st.textContent='✅ Pagamento confirmado!';st.style.color='#2E7D32'}
+          _ipDarBaixa(tipo,recordId,alvo)
+          if(st){st.textContent=alvo!=null?'✅ Pagamento confirmado! Baixa registrada automaticamente.':'✅ Pagamento confirmado!';st.style.color='#2E7D32'}
           clearInterval(_ipPollTimer)
         }
       }catch(e){}
@@ -646,26 +679,19 @@ async function _ipIniciarPagamento(handle,orderNsu,totalF,desc){
     box.innerHTML='<div style="font-size:12px;color:#B84040">Erro ao gerar link: '+e.message+'</div>'
   }
 }
-// Caixa "Pagamento via Pix" com cabeçalho, chave copia-e-cola e QR code - mesmo formato usado no
-// sistema Gestão (AccertTech), com as cores/tipografia próprias do Doce Presença (dourado/serifada).
-// O texto mostrado pro usuário copiar continua sendo a chave crua (mais fácil de ler/digitar) - só o
-// QR em si é que precisa ser o payload EMV completo pra ser reconhecido como Pix de verdade ao escanear.
+// Caixa "Pagamento via Pix" com cabeçalho e chave copia-e-cola, com as cores/tipografia próprias do
+// Doce Presença (dourado/serifada). Sem QR code - desde que o link de pagamento do InfinitePay existe
+// (botão abaixo desta caixa), o QR deixou de ser necessário; a chave continua aqui pra quem prefere
+// pagar via Pix manual mesmo assim (digitando/colando a chave direto no banco).
 function chavePixHtml(chave,favorecido,banco,merchantName,city){
   if(!chave)return''
-  // Se o campo já tem o código "Pix Copia e Cola" completo (gerado oficialmente pelo banco/PSP, começa
-  // com "000201" - o indicador de formato do padrão EMV), usa ele direto no QR em vez de tentar montar
-  // um payload novo - evita qualquer dúvida sobre como aquela chave está registrada de verdade no DICT.
-  const qrData=chave.trim().startsWith('000201')?chave.trim():generatePixPayload(chave,undefined,merchantName||'PAGAMENTO',city)
   return`<div style="margin-top:14px;border:1.5px solid #DDD5C8;border-radius:6px;overflow:hidden">
     <div style="background:#B8912A;color:#fff;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:1.6px;padding:8px 14px">Pagamento via Pix</div>
-    <div style="display:flex;gap:18px;padding:14px 16px;align-items:center;flex-wrap:wrap">
-      <div style="flex:1;min-width:180px">
-        <b style="display:block;font-size:12.5px;color:#3D3028;margin-bottom:6px">Chave Pix (copia e cola)</b>
-        <div style="word-break:break-all;background:#FAF7F4;padding:8px 10px;border-radius:6px;border:1px solid #DDD5C8;font-family:'Courier New',monospace;font-size:11.5px;color:#5A4A3A">${chave}</div>
-        ${favorecido?`<div style="margin-top:8px;font-size:11.5px;color:#5A4A3A">Favorecido: ${favorecido}</div>`:''}
-        ${banco?`<div style="margin-top:2px;font-size:11.5px;color:#5A4A3A">Banco: ${banco}</div>`:''}
-      </div>
-      <img src="${_qrCodeUrl(qrData,100)}" width="100" height="100" alt="QR Code Pix" style="flex-shrink:0;border-radius:4px;border:1px solid #DDD5C8">
+    <div style="padding:14px 16px">
+      <b style="display:block;font-size:12.5px;color:#3D3028;margin-bottom:6px">Chave Pix (copia e cola)</b>
+      <div style="word-break:break-all;background:#FAF7F4;padding:8px 10px;border-radius:6px;border:1px solid #DDD5C8;font-family:'Courier New',monospace;font-size:11.5px;color:#5A4A3A">${chave}</div>
+      ${favorecido?`<div style="margin-top:8px;font-size:11.5px;color:#5A4A3A">Favorecido: ${favorecido}</div>`:''}
+      ${banco?`<div style="margin-top:2px;font-size:11.5px;color:#5A4A3A">Banco: ${banco}</div>`:''}
     </div>
   </div>`
 }
@@ -7107,7 +7133,7 @@ function showClientView(raw,docId){
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
     ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
     ${chavePixHtml(px,pxf,pxb,nome,pxc)}
-    ${_ipBotaoHtml(iph,'orc-'+(docId||oid),_valorDevidoAgora(totalF,entradaPct?totalF*entradaPct/100:0,entradaPaga,parcelas,parcelasPlano),'Orcamento '+oid)}
+    ${_ipBotaoHtml(iph,'orc-'+(docId||oid),_valorDevidoAgora(totalF,entradaPct?totalF*entradaPct/100:0,entradaPaga,parcelas,parcelasPlano),'Orcamento '+oid,'orc',docId||'',_alvoDevidoAgora(entradaPct?totalF*entradaPct/100:0,entradaPaga,parcelasPlano))}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
@@ -7430,6 +7456,10 @@ async function _cvAbrirOrcamento(oid){
 }
 function showContView(d){
   window._cvD=d // guarda para o comprovante PDF
+  // id real do contrato no Firestore (contratos_pub), usado pra dar baixa automática quando o link de
+  // pagamento InfinitePay confirma o pagamento. Só existe quando o link veio com id curto (#contview=id);
+  // no fallback comprimido (sem Firestore) não há registro pra atualizar, então fica vazio mesmo.
+  const _contIdPix=location.hash.startsWith('#contview=')&&!location.hash.slice(10).startsWith('z.')?location.hash.slice(10):''
   const ov=document.getElementById('clientViewOverlay')
   const sb=document.getElementById('sidebar')
   const mn=document.querySelector('.main')
@@ -7530,7 +7560,7 @@ function showContView(d){
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
       ${chavePixHtml(d.px,d.pxf,d.pxb,d.n,d.pxc)}
-      ${_ipBotaoHtml(d.iph,'cont-'+(d.nm||'x'),_valorDevidoAgora(d.tf||0,d.en||0,d.pd,d.pc,d.pp),'Contrato '+(d.nm||''))}
+      ${_ipBotaoHtml(d.iph,'cont-'+(d.nm||'x'),_valorDevidoAgora(d.tf||0,d.en||0,d.pd,d.pc,d.pp),'Contrato '+(d.nm||''),'cont',_contIdPix,_alvoDevidoAgora(d.en||0,d.pd,d.pp))}
       <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
