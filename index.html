@@ -2524,7 +2524,9 @@ function captacaoHTML(){
   const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
   const statusOptsHtml=sel=>Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('')
   return`
-  <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div></div>
+  <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div>
+    ${hoje.length?`<button class="btn btn-s" onclick="imprimirCaptacao()">🖨️ Imprimir lista de hoje</button>`:''}
+  </div>
   <div class="card" style="max-width:560px">
     <div class="fg"><label>Nome <span style="color:var(--bad)">*</span></label><input id="capNome" placeholder="Nome completo" autocomplete="off"></div>
     <div class="frow">
@@ -2576,6 +2578,31 @@ function captacaoAtualizarStatus(id,novoStatus){
   clis[i].statusAtendimento=novoStatus
   DB.set(S.CLIENTES,clis)
   render('captacao')
+}
+function imprimirCaptacao(){
+  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
+  const w=window.open('','_blank','width=900,height=700')
+  if(!w)return
+  const linhas=hoje.map(c=>{
+    const st=CAPTACAO_STATUS[c.statusAtendimento]||CAPTACAO_STATUS.em_conversa
+    const proposta=c.numProposta?`Nº ${c.numProposta} — ${c.propostaEnviada?'Enviada':'Não enviada'}`:'—'
+    return`<tr>
+      <td><strong>${c.nome}</strong></td>
+      <td>${c.fone||'—'}</td>
+      <td>${c.email||'—'}</td>
+      <td>${c.horarioAtendimento||'—'}</td>
+      <td>${st.label}</td>
+      <td>${proposta}</td>
+      <td style="white-space:pre-wrap;font-size:11px">${(c.obs||'—').replace(/\n/g,'<br>')}</td>
+    </tr>`
+  }).join('')
+  w.document.write(docHead('Captação Rápida — '+fmtDate(today()))+
+    `<div class="doc-title">CAPTAÇÃO RÁPIDA — ${fmtDate(today())}</div>
+    <table class="prod-table">
+      <thead><tr><th>Nome</th><th>Telefone</th><th>Email</th><th>Horário</th><th>Status</th><th>Proposta</th><th>Anotações</th></tr></thead>
+      <tbody>${linhas||'<tr><td colspan="7" style="text-align:center;color:#9A8E82">Nenhum captado hoje</td></tr>'}</tbody>
+    </table>`)
+  w.document.close();setTimeout(()=>w.print(),400)
 }
 async function captacaoBuscarCep(valorDigitado){
   const digitos=(valorDigitado||'').replace(/\D/g,'')
