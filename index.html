@@ -572,6 +572,66 @@ function generatePixPayload(key,amount,merchantName,city){
   const payload=parts.join('')
   return payload+_pixCrc16(payload)
 }
+// Integração com a API pública de Checkout Links do InfinitePay (CloudWalk) - gera um link de
+// pagamento hospedado por eles mesmos (aceita Pix e cartão), fugindo de qualquer problema de QR/chave
+// gerado na mão. Não usa chave secreta nenhuma, só o "handle" (nome do InfiniteTag), que é público.
+// Doc: POST https://api.checkout.infinitepay.io/links
+async function _ipCriarLink(handle,items,orderNsu,redirectUrl){
+  const res=await fetch('https://api.checkout.infinitepay.io/links',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle,items,order_nsu:orderNsu,...(redirectUrl?{redirect_url:redirectUrl}:{})})
+  })
+  if(!res.ok)throw new Error('Falha ao criar link InfinitePay ('+res.status+')')
+  return res.json()
+}
+// POST https://api.checkout.infinitepay.io/payment_check - consulta se um pedido já foi pago, sem
+// precisar de webhook/servidor próprio (este app não tem backend - só GitHub Pages estático).
+async function _ipChecarPagamento(handle,orderNsu){
+  const res=await fetch('https://api.checkout.infinitepay.io/payment_check',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({handle,order_nsu:orderNsu})
+  })
+  if(!res.ok)throw new Error('Falha ao consultar pagamento InfinitePay ('+res.status+')')
+  return res.json()
+}
+// Botão "Gerar link de pagamento" mostrado só nas telas vivas (link do cliente) - não entra nas
+// impressões estáticas (imprimirOrc/imprimirCont), que abrem numa janela popup separada sem acesso
+// às funções desta página. oid/desc só levam números/texto simples, sem aspas, seguro pro onclick inline.
+function _ipBotaoHtml(handle,orderNsu,totalF,desc){
+  if(!handle)return''
+  return`<div style="margin-top:10px">
+    <button type="button" onclick="_ipIniciarPagamento('${handle}','${orderNsu}',${totalF},'${desc}')" style="width:100%;padding:11px;background:#6D28D9;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer">💳 Gerar link de pagamento (InfinitePay)</button>
+    <div id="ipPayBox" style="margin-top:8px"></div>
+  </div>`
+}
+let _ipPollTimer=null
+async function _ipIniciarPagamento(handle,orderNsu,totalF,desc){
+  const box=document.getElementById('ipPayBox')
+  if(!box)return
+  box.innerHTML='<div style="font-size:12px;color:#8A7E6E">Gerando link de pagamento...</div>'
+  try{
+    const resp=await _ipCriarLink(handle,[{quantity:1,price:Math.round(totalF*100),description:desc}],orderNsu)
+    const url=resp.url||resp.checkout_url||resp.link||resp.payment_url
+    if(!url)throw new Error('a InfinitePay não retornou um link')
+    box.innerHTML=`<a href="${url}" target="_blank" rel="noreferrer" style="display:block;text-align:center;background:#6D28D9;color:#fff;font-weight:700;padding:12px;border-radius:8px;text-decoration:none;margin-bottom:8px">Abrir página de pagamento →</a>
+      <div id="ipPayStatus" style="font-size:12px;color:#B05000;text-align:center">⏳ Aguardando pagamento...</div>`
+    if(_ipPollTimer)clearInterval(_ipPollTimer)
+    _ipPollTimer=setInterval(async()=>{
+      try{
+        const r=await _ipChecarPagamento(handle,orderNsu)
+        const st=document.getElementById('ipPayStatus')
+        if(r.paid){
+          if(st){st.textContent='✅ Pagamento confirmado!';st.style.color='#2E7D32'}
+          clearInterval(_ipPollTimer)
+        }
+      }catch(e){}
+    },6000)
+  }catch(e){
+    box.innerHTML='<div style="font-size:12px;color:#B84040">Erro ao gerar link: '+e.message+'</div>'
+  }
+}
 // Caixa "Pagamento via Pix" com cabeçalho, chave copia-e-cola e QR code - mesmo formato usado no
 // sistema Gestão (AccertTech), com as cores/tipografia próprias do Doce Presença (dourado/serifada).
 // O texto mostrado pro usuário copiar continua sendo a chave crua (mais fácil de ler/digitar) - só o
@@ -3506,6 +3566,7 @@ function empresaHTML(){
     <div class="frow"><div class="fg"><label>Chave Pix <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece na condição de pagamento de orçamentos e contratos</span></label><input id="eChavePix" value="${e.chavePix||''}" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
     <div class="fg"><label>Favorecido <span style="font-weight:400;text-transform:none;color:var(--txt3)">— titular da chave Pix</span></label><input id="ePixFavorecido" value="${e.pixFavorecido||''}" placeholder="Nome completo do titular"></div></div>
     <div class="fg"><label>Banco <span style="font-weight:400;text-transform:none;color:var(--txt3)">— instituição da chave Pix, opcional</span></label><input id="ePixBanco" value="${e.pixBanco||''}" placeholder="Ex: InfinitePay (CloudWalk) — Instituição de Pagamento"></div>
+    <div class="fg"><label>Handle InfinitePay <span style="font-weight:400;text-transform:none;color:var(--txt3)">— seu @ do InfiniteTag (sem o $), opcional — gera um link de pagamento oficial em vez do QR manual</span></label><input id="eInfinitepayHandle" value="${e.infinitepayHandle||''}" placeholder="Ex: mimosdabe"></div>
     <div class="fg"><label>Slogan / Observação no rodapé</label><textarea id="eObs" placeholder="Especializada em bolos artesanais e doces finos...">${e.obs||''}</textarea></div>
   </div>
   <div class="card" style="margin-top:16px">
@@ -3557,7 +3618,7 @@ function pgtoRedefinir(){
   toast('Formas de pagamento redefinidas','ok')
 }
 function salvarEmpresa(){
-  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),chavePix:v('eChavePix'),pixFavorecido:v('ePixFavorecido'),pixBanco:v('ePixBanco'),obs:v('eObs')}
+  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),chavePix:v('eChavePix'),pixFavorecido:v('ePixFavorecido'),pixBanco:v('ePixBanco'),infinitepayHandle:v('eInfinitepayHandle'),obs:v('eObs')}
   DB.set(S.EMPRESA,e);toast('Dados da empresa salvos!','ok')
   renderSlogoInfo()
 }
@@ -6819,7 +6880,7 @@ async function gerarLinkOrc(id){
   const p={tp:'orc'}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
-  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco;if(e.cidade)p.pxc=e.cidade
+  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco;if(e.cidade)p.pxc=e.cidade;if(e.infinitepayHandle)p.iph=e.infinitepayHandle
   const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   if(_ea)p.ea=_ea
   p.i=orcNumFmt(o);p.dt=o.data;p.v=o.validade
@@ -6979,15 +7040,15 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,px,pxf,pxb,pxc,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
+  let nome,er,ea,ef,ee,ew,px,pxf,pxb,pxc,iph,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
   if(raw.o){
     const {o,cli,e}=raw
-    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||'';pxc=e.cidade||''
+    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||'';pxc=e.cidade||'';iph=e.infinitepayHandle||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
     nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano;entradaPaga=!!o.entradaPaga
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
-    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||'';pxc=raw.pxc||''
+    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||'';pxc=raw.pxc||'';iph=raw.iph||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
     nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp;entradaPaga=!!raw.epg
     itens=(raw.it||[]).map(x=>{
@@ -7032,6 +7093,7 @@ function showClientView(raw,docId){
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
     ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
     ${chavePixHtml(px,pxf,pxb,nome,pxc)}
+    ${_ipBotaoHtml(iph,'orc-'+(docId||oid),totalF,'Orcamento '+oid)}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
@@ -7275,7 +7337,7 @@ async function gerarLinkCont(id){
   const _ea=[[emp.end||'',emp.bairro||''].filter(Boolean).join(', '),[emp.cidade?(emp.cidade+(emp.estado?' / '+emp.estado:'')):'',emp.cep?'CEP: '+emp.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   const payload={
     tp:'c',
-    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',pxc:emp.cidade||'',
+    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',pxc:emp.cidade||'',iph:emp.infinitepayHandle||'',
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
@@ -7454,6 +7516,7 @@ function showContView(d){
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
       ${chavePixHtml(d.px,d.pxf,d.pxb,d.n,d.pxc)}
+      ${_ipBotaoHtml(d.iph,'cont-'+(d.nm||'x'),d.tf||0,'Contrato '+(d.nm||''))}
       <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
