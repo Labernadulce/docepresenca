@@ -596,6 +596,20 @@ async function _ipChecarPagamento(handle,orderNsu){
   if(!res.ok)throw new Error('Falha ao consultar pagamento InfinitePay ('+res.status+')')
   return res.json()
 }
+// Calcula quanto cobrar AGORA no link de pagamento - nunca o valor total do orçamento/contrato quando
+// existe entrada/parcelamento, e sim só a parcela em aberto da vez (entrada, se ainda não paga; senão
+// a próxima parcela pendente; senão uma parcela igual quando não há detalhamento por parcela).
+function _valorDevidoAgora(totalF,entradaValor,entradaPaga,numParcelas,parcelasPlano){
+  if(Array.isArray(parcelasPlano)&&parcelasPlano.length){
+    if(entradaValor>0&&!entradaPaga)return entradaValor
+    const prox=parcelasPlano.find(p=>!p.pago)
+    if(prox)return prox.valor
+    return totalF
+  }
+  if(entradaValor>0&&!entradaPaga)return entradaValor
+  if(numParcelas>1)return(totalF-(entradaValor||0))/numParcelas
+  return totalF
+}
 // Botão "Gerar link de pagamento" mostrado só nas telas vivas (link do cliente) - não entra nas
 // impressões estáticas (imprimirOrc/imprimirCont), que abrem numa janela popup separada sem acesso
 // às funções desta página. oid/desc só levam números/texto simples, sem aspas, seguro pro onclick inline.
@@ -7093,7 +7107,7 @@ function showClientView(raw,docId){
     <div style="font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#B8912A;margin-bottom:8px">Condição de Pagamento</div>
     ${(Array.isArray(parcelasPlano)?planoPagamentoLinhasComStatus({entrada:entradaPct?{valor:totalF*entradaPct/100,data:entradaData,pago:entradaPaga}:null,parcelas:parcelasPlano}):[condPagamentoTxt(totalF,entradaPct,parcelas)]).map(l=>`<div style="margin-bottom:3px">${l}</div>`).join('')}
     ${chavePixHtml(px,pxf,pxb,nome,pxc)}
-    ${_ipBotaoHtml(iph,'orc-'+(docId||oid),totalF,'Orcamento '+oid)}
+    ${_ipBotaoHtml(iph,'orc-'+(docId||oid),_valorDevidoAgora(totalF,entradaPct?totalF*entradaPct/100:0,entradaPaga,parcelas,parcelasPlano),'Orcamento '+oid)}
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
@@ -7516,7 +7530,7 @@ function showContView(d){
       </div>`:''}
       ${d.pg?`<div style="margin-top:4px;font-size:12px;color:#5A4A3A">Forma de Pagamento: <strong>${d.pg}</strong></div>`:''}
       ${chavePixHtml(d.px,d.pxf,d.pxb,d.n,d.pxc)}
-      ${_ipBotaoHtml(d.iph,'cont-'+(d.nm||'x'),d.tf||0,'Contrato '+(d.nm||''))}
+      ${_ipBotaoHtml(d.iph,'cont-'+(d.nm||'x'),_valorDevidoAgora(d.tf||0,d.en||0,d.pd,d.pc,d.pp),'Contrato '+(d.nm||''))}
       <div id="cvPagBox" style="margin-top:10px"></div>
     </div>
     ${clauses.length?`<div style="margin-top:22px">
