@@ -3813,8 +3813,10 @@ function empresaHTML(){
     <div class="card-title">Contato</div>
     <div class="frow"><div class="fg"><label>Telefone / WhatsApp</label><input id="eFone" value="${e.fone||''}" placeholder="(11) 99999-9999"></div>
     <div class="fg"><label>Email</label><input id="eEmail" value="${e.email||''}" placeholder="contato@empresa.com"></div></div>
-    <div class="frow"><div class="fg"><label>Site / Instagram</label><input id="eSite" value="${e.site||''}" placeholder="www.docearte.com.br"></div>
+    <div class="frow"><div class="fg"><label>Site</label><input id="eSite" value="${e.site||''}" placeholder="www.docearte.com.br"></div>
     <div class="fg"><label>WhatsApp (para links de cliente)</label><input id="eWa" value="${e.wa||''}" placeholder="5511999999999"></div></div>
+    <div class="frow"><div class="fg"><label>Instagram <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece como link na proposta enviada ao cliente</span></label><input id="eInstagram" value="${e.instagram||''}" placeholder="@labernadulce"></div>
+    <div class="fg"><label>Perfil no Casamentos.com <span style="font-weight:400;text-transform:none;color:var(--txt3)">— link completo do seu perfil</span></label><input id="eCasamentos" value="${e.casamentos||''}" placeholder="https://www.casamentos.com.br/fornecedor/..."></div></div>
     <div class="frow"><div class="fg"><label>Chave Pix <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece na condição de pagamento de orçamentos e contratos</span></label><input id="eChavePix" value="${e.chavePix||''}" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
     <div class="fg"><label>Favorecido <span style="font-weight:400;text-transform:none;color:var(--txt3)">— titular da chave Pix</span></label><input id="ePixFavorecido" value="${e.pixFavorecido||''}" placeholder="Nome completo do titular"></div></div>
     <div class="fg"><label>Banco <span style="font-weight:400;text-transform:none;color:var(--txt3)">— instituição da chave Pix, opcional</span></label><input id="ePixBanco" value="${e.pixBanco||''}" placeholder="Ex: InfinitePay (CloudWalk) — Instituição de Pagamento"></div>
@@ -3870,7 +3872,7 @@ function pgtoRedefinir(){
   toast('Formas de pagamento redefinidas','ok')
 }
 function salvarEmpresa(){
-  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),chavePix:v('eChavePix'),pixFavorecido:v('ePixFavorecido'),pixBanco:v('ePixBanco'),infinitepayHandle:v('eInfinitepayHandle'),obs:v('eObs')}
+  const e={nome:v('eNome'),fantasia:v('eFantasia'),cnpj:v('eCnpj'),ie:v('eIe'),end:v('eEnd'),bairro:v('eBairro'),cidade:v('eCidade'),estado:v('eEstado'),cep:v('eCep'),fone:v('eFone'),email:v('eEmail'),site:v('eSite'),wa:v('eWa'),instagram:v('eInstagram'),casamentos:v('eCasamentos'),chavePix:v('eChavePix'),pixFavorecido:v('ePixFavorecido'),pixBanco:v('ePixBanco'),infinitepayHandle:v('eInfinitepayHandle'),obs:v('eObs')}
   DB.set(S.EMPRESA,e);toast('Dados da empresa salvos!','ok')
   renderSlogoInfo()
 }
@@ -7132,7 +7134,7 @@ async function gerarLinkOrc(id){
   const p={tp:'orc'}
   const _en=e.fantasia||e.nome||'';if(_en)p.n=_en
   const _razao=e.fantasia&&e.nome&&e.fantasia!==e.nome?e.nome:'';if(_razao)p.er=_razao
-  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco;if(e.cidade)p.pxc=e.cidade;if(e.infinitepayHandle)p.iph=e.infinitepayHandle
+  if(e.fone)p.ef=e.fone;if(e.email)p.ee=e.email;if(e.wa)p.ew=e.wa;if(e.chavePix)p.px=e.chavePix;if(e.pixFavorecido)p.pxf=e.pixFavorecido;if(e.pixBanco)p.pxb=e.pixBanco;if(e.cidade)p.pxc=e.cidade;if(e.infinitepayHandle)p.iph=e.infinitepayHandle;if(e.instagram)p.ig=e.instagram;if(e.casamentos)p.cc=e.casamentos
   const _ea=[[e.end||'',e.bairro||''].filter(Boolean).join(', '),[e.cidade?(e.cidade+(e.estado?' / '+e.estado:'')):'',e.cep?'CEP: '+e.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   if(_ea)p.ea=_ea
   p.i=orcNumFmt(o);p.dt=o.data;p.v=o.validade
@@ -7292,15 +7294,15 @@ async function checkClientView(){
   }catch(err){console.error(err)}
 }
 function showClientView(raw,docId){
-  let nome,er,ea,ef,ee,ew,px,pxf,pxb,pxc,iph,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
+  let nome,er,ea,ef,ee,ew,px,pxf,pxb,pxc,iph,ig,cc,oid,dt,validade,total,desc,totalF,obs,itens,clinome,clifone,nv,dv,dd,hd,md,pg,xe,entradaPct,parcelas,entradaData,parcelasPlano,entradaPaga
   if(raw.o){
     const {o,cli,e}=raw
-    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||'';pxc=e.cidade||'';iph=e.infinitepayHandle||''
+    nome=e.fantasia||e.nome||'Confeitaria';er='';ea='';ef=e.fone||'';ee=e.email||'';ew=e.wa||'';px=e.chavePix||'';pxf=e.pixFavorecido||'';pxb=e.pixBanco||'';pxc=e.cidade||'';iph=e.infinitepayHandle||'';ig=e.instagram||'';cc=e.casamentos||''
     oid=orcNumFmt(o);dt=o.data;validade=o.validade;total=o.total;desc=o.desc||0;totalF=o.totalF;obs=o.obs||''
     nv=o.noivos||'';dv=o.dataEvento||'';dd=o.dataEntrega||'';hd=o.horaEntrega||'';md=o.entrega||'';pg=o.pgto||'';xe=o.endEntrega||'';entradaPct=o.entradaPct||0;parcelas=o.parcelas||1;entradaData=o.entradaData||'';parcelasPlano=o.parcelasPlano;entradaPaga=!!o.entradaPaga
     itens=o.itens.map(x=>({n:x.nome||x.desc||'',q:x.qtd,pu:x.pu||0,s:x.sub,c:'Outros'}));clinome=cli.nome||'';clifone=cli.fone||''
   }else{
-    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||'';pxc=raw.pxc||'';iph=raw.iph||''
+    nome=raw.n||'Confeitaria';er=raw.er||'';ea=raw.ea||'';ef=raw.ef||'';ee=raw.ee||'';ew=raw.ew||'';px=raw.px||'';pxf=raw.pxf||'';pxb=raw.pxb||'';pxc=raw.pxc||'';iph=raw.iph||'';ig=raw.ig||'';cc=raw.cc||''
     oid=raw.i||'';dt=raw.dt||'';validade=raw.v;total=raw.t;desc=raw.d||0;totalF=raw.tf;obs=raw.ob||''
     nv=raw.nv||'';dv=raw.dv||'';dd=raw.dd||'';hd=raw.hd||'';md=raw.md||'';pg=raw.pg||'';xe=raw.xe||'';entradaPct=raw.ep||0;parcelas=raw.pc||1;entradaData=raw.ed||'';parcelasPlano=raw.pp;entradaPaga=!!raw.epg
     itens=(raw.it||[]).map(x=>{
@@ -7394,6 +7396,12 @@ function showClientView(raw,docId){
         </div>
         <div class="cv-cab-right">
           ${(()=>{const _sd=s=>(s||'').replace(/\D/g,'');const _eq=(a,b)=>{const na=_sd(a),nb=_sd(b);return na&&nb&&(na===nb||na.endsWith(nb)||nb.endsWith(na))};return[ew||ef,(!ew&&ef)||_eq(ef,ew)?'':ef,ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')})()}
+          ${(()=>{const _links=[]
+            if(ig){const _handle=ig.replace(/^@/,'').trim();const _igUrl=/^https?:\/\//i.test(ig)?ig:'https://instagram.com/'+_handle.replace(/^https?:\/\/(www\.)?instagram\.com\//i,'')
+              _links.push(`<a href="${_igUrl}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">📷 ${ig.startsWith('@')?ig:'@'+_handle}</a>`)}
+            if(cc)_links.push(`<a href="${cc}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">💍 Casamentos.com</a>`)
+            return _links.length?`<div style="margin-top:4px;display:flex;flex-direction:column;gap:2px">${_links.join('')}</div>`:''
+          })()}
         </div>
       </div>
 
@@ -7589,7 +7597,7 @@ async function gerarLinkCont(id){
   const _ea=[[emp.end||'',emp.bairro||''].filter(Boolean).join(', '),[emp.cidade?(emp.cidade+(emp.estado?' / '+emp.estado:'')):'',emp.cep?'CEP: '+emp.cep:''].filter(Boolean).join(' - ')].filter(Boolean).join(' — ')
   const payload={
     tp:'c',
-    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',pxc:emp.cidade||'',iph:emp.infinitepayHandle||'',
+    n:emp.fantasia||emp.nome||'',er:_razao,ea:_ea,ef:emp.fone||'',ew:emp.wa||'',ee:emp.email||'',px:emp.chavePix||'',pxf:emp.pixFavorecido||'',pxb:emp.pixBanco||'',pxc:emp.cidade||'',iph:emp.infinitepayHandle||'',ig:emp.instagram||'',cc:emp.casamentos||'',
     nm:c.num,dt:c.data,cn:cli.nome||c.noivos||'',cf:cli.fone||'',
     nv:c.noivos||'',dv:c.dataEvento||'',dd:c.dataEntrega||'',hd:c.horaEntrega||'',
     md:c.entrega||'',xe:c.endEntrega||'',pg:c.pgto||'',
