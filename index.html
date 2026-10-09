@@ -437,7 +437,7 @@ tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
 
 <script>
 // ===== CONSTANTS =====
-const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc',COMPRAS:'ds_cmp',TRANS:'ds_trn',OS:'ds_os',EMPRESA:'ds_emp',RECEITAS:'ds_rec',PRODUCOES:'ds_producoes',RECSTATUS:'ds_rec_status',CONTRATOS:'ds_cont',PGTOS:'ds_pgtos',CURSOS:'ds_cursos',DOCS:'ds_docs'}
+const S={CLIENTES:'ds_cli',PRODUTOS:'ds_prod',VENDAS:'ds_vnd',ORCAMENTOS:'ds_orc',COMPRAS:'ds_cmp',TRANS:'ds_trn',OS:'ds_os',EMPRESA:'ds_emp',RECEITAS:'ds_rec',PRODUCOES:'ds_producoes',RECSTATUS:'ds_rec_status',CONTRATOS:'ds_cont',PGTOS:'ds_pgtos',CURSOS:'ds_cursos',DOCS:'ds_docs',LEADS:'ds_lead'}
 const PTITLES={dashboard:'Dashboard',vendas:'Vendas',orcamentos:'Orçamentos',contratos:'Contratos',romaneio:'Romaneio de Entrega',clientes:'Clientes',captacao:'Captação',estoque:'Estoque',compras:'Compras',financeiro:'Financeiro',os:'Ordens de Serviço',relatorios:'Relatórios',empresa:'Minha Empresa',receitas:'Receitas',producao:'Produção',cursos:'Cursos',documentacao:'Documentação'}
 
 // ===== DB =====
@@ -2499,7 +2499,6 @@ function editCli(id){
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarCli()">Salvar</button>`)
 }
 function cliForm(c){
-  const statusOpts=Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${c.statusAtendimento===k?'selected':''}>${v.label}</option>`).join('')
   return`
   <div class="frow"><div class="fg"><label>Nome Completo *</label><input id="cNome" value="${c.nome||''}" placeholder="Nome do cliente"></div>
   <div class="fg"><label>Cpf</label><input id="cCpf" value="${c.cpf||''}" placeholder="000.000.000-00"></div></div>
@@ -2508,28 +2507,15 @@ function cliForm(c){
   <div class="fg"><label>Endereço</label><input id="cEnd" value="${c.end||''}" placeholder="Rua, número, bairro"></div>
   <div class="frow"><div class="fg"><label>Cep</label><input id="cCep" value="${c.cep||''}" placeholder="00000-000"></div>
   <div class="fg"><label>Cidade</label><input id="cCidade" value="${c.cidade||''}" placeholder="São Paulo"></div></div>
-  <div class="fg"><label>Observações</label><textarea id="cObs" placeholder="Alergias, preferências...">${c.obs||''}</textarea></div>
-  <div class="divider" style="height:1px;background:var(--cream2);margin:14px 0"></div>
-  <div class="card-title" style="margin-bottom:10px">Contato Comercial</div>
-  <div class="frow"><div class="fg"><label>Status do Atendimento</label><select id="cStatusAtendimento">${statusOpts}</select></div>
-  <div class="fg"><label>Horário do Atendimento</label><input id="cHorarioAtendimento" type="time" value="${c.horarioAtendimento||''}"></div></div>
-  <div class="frow"><div class="fg"><label>Data do Contato</label><input id="cDataContato" type="date" value="${c.dataContato||''}"></div>
-  <div class="fg"><label>Data do Evento</label><input id="cDataEventoCli" type="date" value="${c.dataEventoCli||''}"></div></div>
-  <div class="frow"><div class="fg"><label>Nº da Proposta</label><input id="cNumProposta" value="${c.numProposta||''}" placeholder="Ex: 230812"></div>
-  <div class="fg" style="justify-content:flex-end;display:flex;flex-direction:column"><label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--txt2);height:40px"><input type="checkbox" id="cPropostaEnviada" ${c.propostaEnviada?'checked':''} style="width:17px;height:17px;accent-color:var(--ok)">Proposta já enviada</label></div></div>`
+  <div class="fg"><label>Observações</label><textarea id="cObs" placeholder="Alergias, preferências...">${c.obs||''}</textarea></div>`
 }
 function salvarCli(){
   const nome=(document.getElementById('cNome')||{}).value||''
   if(!nome.trim()){toast('Informe o nome do cliente','err');return}
   // Parte de um registro existente (quando editando) e só sobrescreve os campos deste formulário -
-  // assim qualquer campo que o form não conhece (ex: capturadoVia, vindo da tela de Captação) não se
-  // perde silenciosamente numa edição comum. Bug real encontrado: editar um cliente vindo da Captação
-  // apagava a marcação "capturadoVia" e ele sumia da lista "Captados hoje", mesmo com os dados intactos.
+  // assim qualquer campo que o form não conhece não se perde silenciosamente numa edição comum.
   const existente=editId?(DB.get(S.CLIENTES).find(x=>x.id===editId)||{}):{}
-  const c={...existente,id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:existente.dt||today(),
-    statusAtendimento:v('cStatusAtendimento'),horarioAtendimento:v('cHorarioAtendimento'),
-    dataContato:v('cDataContato'),dataEventoCli:v('cDataEventoCli'),
-    numProposta:v('cNumProposta'),propostaEnviada:!!(document.getElementById('cPropostaEnviada')||{}).checked}
+  const c={...existente,id:editId||genId(),nome:nome.trim(),cpf:v('cCpf'),fone:v('cFone'),email:v('cEmail'),end:v('cEnd'),cep:v('cCep'),cidade:v('cCidade'),obs:(document.getElementById('cObs')||{}).value,dt:existente.dt||today()}
   const clis=DB.get(S.CLIENTES);if(editId){const i=clis.findIndex(x=>x.id===editId);if(i>=0)clis[i]=c}else clis.push(c)
   DB.set(S.CLIENTES,clis);closeModal();toast(editId?'Cliente atualizado!':'Cliente cadastrado!','ok');render('clientes')
 }
@@ -2555,7 +2541,7 @@ const CAPTACAO_STATUS={
   nao_atendeu:{label:'📵 Não atendeu',cor:'#8A7E6E',bg:'#F0EDE8'},
 }
 function captacaoHTML(){
-  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
+  const hoje=DB.get(S.LEADS).filter(x=>x.dt===today())
   const statusOptsHtml=sel=>Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('')
   return`
   <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div>
@@ -2602,19 +2588,34 @@ function captacaoHTML(){
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <select onchange="captacaoAtualizarStatus('${c.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid ${st.cor}33;background:${st.bg};color:${st.cor};cursor:pointer">${statusOptsHtml(c.statusAtendimento||'em_conversa')}</select>
-          <button class="btn-ic" title="Editar cadastro completo" onclick="editCli('${c.id}')" style="flex-shrink:0">✏️</button>
+          <button class="btn-ic" title="Editar" onclick="editLead('${c.id}')" style="flex-shrink:0">✏️</button>
+          <button class="btn-ic" title="Converter em Cliente" onclick="converterLeadEmCliente('${c.id}')" style="flex-shrink:0;color:var(--ok)">➕</button>
         </div>
       </div>`}).join('')}
   </div>`:''}`
 }
 function captacaoAtualizarStatus(id,novoStatus){
-  const clis=DB.get(S.CLIENTES);const i=clis.findIndex(x=>x.id===id);if(i<0)return
-  clis[i].statusAtendimento=novoStatus
-  DB.set(S.CLIENTES,clis)
+  const leads=DB.get(S.LEADS);const i=leads.findIndex(x=>x.id===id);if(i<0)return
+  leads[i].statusAtendimento=novoStatus
+  DB.set(S.LEADS,leads)
   render('captacao')
 }
+// Promove um lead/prospecção pra cliente de verdade (ex: fechou o pedido) - cria o cadastro em
+// Clientes com os dados básicos e tira da lista de Captação, pra não ficar duplicado nos dois lugares.
+function converterLeadEmCliente(id){
+  const leads=DB.get(S.LEADS)
+  const l=leads.find(x=>x.id===id);if(!l)return
+  confirmarModal(`Converter <strong>${l.nome}</strong> em cliente? Ele sai da lista de Captação e entra em Clientes.`,()=>{
+    const clis=DB.get(S.CLIENTES)
+    clis.push({id:genId(),nome:l.nome,cpf:'',fone:l.fone||'',email:l.email||'',end:l.end||'',cep:l.cep||'',cidade:l.cidade||'',obs:l.obs||'',dt:today()})
+    DB.set(S.CLIENTES,clis)
+    DB.set(S.LEADS,leads.filter(x=>x.id!==id))
+    toast('Convertido em cliente!','ok')
+    render('captacao')
+  })
+}
 function imprimirCaptacao(){
-  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
+  const hoje=DB.get(S.LEADS).filter(x=>x.dt===today())
   const w=window.open('','_blank','width=900,height=700')
   if(!w)return
   const linhas=hoje.map(c=>{
@@ -2664,20 +2665,49 @@ function salvarCaptacao(){
   const obsPartes=[]
   if(dataEvento)obsPartes.push('Data do evento: '+fmtDate(dataEvento))
   if(notas)obsPartes.push(notas)
-  const c={
-    id:genId(),nome:nome.trim(),cpf:'',
+  const l={
+    id:genId(),nome:nome.trim(),
     fone:v('capFone'),email:v('capEmail'),
     end:v('capEnd'),cep:v('capCep'),
     cidade:[v('capCidade'),v('capEstado')].filter(Boolean).join('/'),
-    obs:obsPartes.join('\n'),dt:today(),capturadoVia:'captacao',
+    obs:obsPartes.join('\n'),dt:today(),
     statusAtendimento:v('capStatus')||'em_conversa',horarioAtendimento:v('capHorario'),
     dataContato:v('capDataContato')||today(),
     numProposta:v('capNumProposta'),
     propostaEnviada:!!(document.getElementById('capPropostaEnviada')||{}).checked
   }
-  const clis=DB.get(S.CLIENTES);clis.push(c);DB.set(S.CLIENTES,clis)
-  toast('Cliente salvo! Pronto pra próxima ligação.','ok')
+  const leads=DB.get(S.LEADS);leads.push(l);DB.set(S.LEADS,leads)
+  toast('Lead salvo! Pronto pra próxima ligação.','ok')
   render('captacao')
+}
+// ===== EDITAR LEAD (Captação) =====
+function editLead(id){
+  const l=DB.get(S.LEADS).find(x=>x.id===id);if(!l)return
+  const statusOpts=Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${l.statusAtendimento===k?'selected':''}>${v.label}</option>`).join('')
+  openModal('Editar Lead',`
+    <div class="fg"><label>Nome *</label><input id="lNome" value="${l.nome||''}"></div>
+    <div class="frow"><div class="fg"><label>Status do Atendimento</label><select id="lStatus">${statusOpts}</select></div>
+    <div class="fg"><label>Horário do Atendimento</label><input id="lHorario" type="time" value="${l.horarioAtendimento||''}"></div></div>
+    <div class="frow"><div class="fg"><label>Telefone</label><input id="lFone" value="${l.fone||''}"></div>
+    <div class="fg"><label>Email</label><input id="lEmail" type="email" value="${l.email||''}"></div></div>
+    <div class="fg"><label>Endereço</label><input id="lEnd" value="${l.end||''}"></div>
+    <div class="frow"><div class="fg"><label>Cep</label><input id="lCep" value="${l.cep||''}"></div>
+    <div class="fg"><label>Cidade</label><input id="lCidade" value="${l.cidade||''}"></div></div>
+    <div class="frow"><div class="fg"><label>Data do Contato</label><input id="lDataContato" type="date" value="${l.dataContato||''}"></div>
+    <div class="fg"><label>Nº da Proposta</label><input id="lNumProposta" value="${l.numProposta||''}"></div></div>
+    <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;color:var(--txt2);margin-bottom:10px"><input type="checkbox" id="lPropostaEnviada" ${l.propostaEnviada?'checked':''} style="width:17px;height:17px;accent-color:var(--ok)">Proposta já enviada</label>
+    <div class="fg"><label>Anotações</label><textarea id="lObs">${l.obs||''}</textarea></div>`,
+    `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarLead('${id}')">Salvar</button>`)
+}
+function salvarLead(id){
+  const leads=DB.get(S.LEADS);const i=leads.findIndex(x=>x.id===id);if(i<0)return
+  const nome=(document.getElementById('lNome')||{}).value||''
+  if(!nome.trim()){toast('Informe o nome','err');return}
+  leads[i]={...leads[i],nome:nome.trim(),fone:v('lFone'),email:v('lEmail'),end:v('lEnd'),cep:v('lCep'),cidade:v('lCidade'),
+    statusAtendimento:v('lStatus'),horarioAtendimento:v('lHorario'),dataContato:v('lDataContato'),
+    numProposta:v('lNumProposta'),propostaEnviada:!!(document.getElementById('lPropostaEnviada')||{}).checked,
+    obs:(document.getElementById('lObs')||{}).value}
+  DB.set(S.LEADS,leads);closeModal();toast('Lead atualizado!','ok');render('captacao')
 }
 
 // ===== ESTOQUE =====
@@ -8353,7 +8383,7 @@ const _FB_CFG={
   messagingSenderId:'355799786526',
   appId:'1:355799786526:web:3bf1f988bb0cda65ddfa0f'
 }
-const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos','ds_cursos','ds_docs']
+const _FB_KEYS=['ds_cli','ds_prod','ds_vnd','ds_orc','ds_cmp','ds_trn','ds_os','ds_emp','ds_rec','ds_producoes','ds_rec_status','ds_cont','ds_pgtos','ds_cursos','ds_docs','ds_lead']
 let _fdb=null,_fbReady=false,_fbAuthReady=false
 // Isolamento por empresa: as regras de seguranca do projeto so liberam as colecoes ja existentes
 // (store, contratos_pub, assinaturas, fotos) - uma colecao nova tipo 'orgs' e rejeitada (testado e confirmado).
