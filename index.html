@@ -7399,7 +7399,7 @@ function showClientView(raw,docId){
           ${(()=>{const _links=[]
             if(ig){const _handle=ig.replace(/^@/,'').trim();const _igUrl=/^https?:\/\//i.test(ig)?ig:'https://instagram.com/'+_handle.replace(/^https?:\/\/(www\.)?instagram\.com\//i,'')
               _links.push(`<a href="${_igUrl}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">📷 ${ig.startsWith('@')?ig:'@'+_handle}</a>`)}
-            if(cc)_links.push(`<a href="${cc}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">💍 Casamentos.com</a>`)
+            if(cc)_links.push(`<a href="${cc}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">💍 Perfil no Casamentos.com</a>`)
             return _links.length?`<div style="margin-top:4px;display:flex;flex-direction:column;gap:2px">${_links.join('')}</div>`:''
           })()}
         </div>
