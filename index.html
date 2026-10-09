@@ -2541,7 +2541,7 @@ const CAPTACAO_STATUS={
   nao_atendeu:{label:'📵 Não atendeu',cor:'#8A7E6E',bg:'#F0EDE8'},
 }
 function captacaoHTML(){
-  const hoje=DB.get(S.LEADS).filter(x=>x.dt===today())
+  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
   const statusOptsHtml=sel=>Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('')
   return`
   <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div>
@@ -2589,33 +2589,18 @@ function captacaoHTML(){
         <div style="display:flex;align-items:center;gap:6px">
           <select onchange="captacaoAtualizarStatus('${c.id}',this.value)" style="font-size:11px;font-weight:700;padding:5px 8px;border-radius:8px;border:1px solid ${st.cor}33;background:${st.bg};color:${st.cor};cursor:pointer">${statusOptsHtml(c.statusAtendimento||'em_conversa')}</select>
           <button class="btn-ic" title="Editar" onclick="editLead('${c.id}')" style="flex-shrink:0">✏️</button>
-          <button class="btn-ic" title="Converter em Cliente" onclick="converterLeadEmCliente('${c.id}')" style="flex-shrink:0;color:var(--ok)">➕</button>
         </div>
       </div>`}).join('')}
   </div>`:''}`
 }
 function captacaoAtualizarStatus(id,novoStatus){
-  const leads=DB.get(S.LEADS);const i=leads.findIndex(x=>x.id===id);if(i<0)return
-  leads[i].statusAtendimento=novoStatus
-  DB.set(S.LEADS,leads)
+  const clis=DB.get(S.CLIENTES);const i=clis.findIndex(x=>x.id===id);if(i<0)return
+  clis[i].statusAtendimento=novoStatus
+  DB.set(S.CLIENTES,clis)
   render('captacao')
 }
-// Promove um lead/prospecção pra cliente de verdade (ex: fechou o pedido) - cria o cadastro em
-// Clientes com os dados básicos e tira da lista de Captação, pra não ficar duplicado nos dois lugares.
-function converterLeadEmCliente(id){
-  const leads=DB.get(S.LEADS)
-  const l=leads.find(x=>x.id===id);if(!l)return
-  confirmarModal(`Converter <strong>${l.nome}</strong> em cliente? Ele sai da lista de Captação e entra em Clientes.`,()=>{
-    const clis=DB.get(S.CLIENTES)
-    clis.push({id:genId(),nome:l.nome,cpf:'',fone:l.fone||'',email:l.email||'',end:l.end||'',cep:l.cep||'',cidade:l.cidade||'',obs:l.obs||'',dt:today()})
-    DB.set(S.CLIENTES,clis)
-    DB.set(S.LEADS,leads.filter(x=>x.id!==id))
-    toast('Convertido em cliente!','ok')
-    render('captacao')
-  })
-}
 function imprimirCaptacao(){
-  const hoje=DB.get(S.LEADS).filter(x=>x.dt===today())
+  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
   const w=window.open('','_blank','width=900,height=700')
   if(!w)return
   const linhas=hoje.map(c=>{
@@ -2665,24 +2650,24 @@ function salvarCaptacao(){
   const obsPartes=[]
   if(dataEvento)obsPartes.push('Data do evento: '+fmtDate(dataEvento))
   if(notas)obsPartes.push(notas)
-  const l={
-    id:genId(),nome:nome.trim(),
+  const c={
+    id:genId(),nome:nome.trim(),cpf:'',
     fone:v('capFone'),email:v('capEmail'),
     end:v('capEnd'),cep:v('capCep'),
     cidade:[v('capCidade'),v('capEstado')].filter(Boolean).join('/'),
-    obs:obsPartes.join('\n'),dt:today(),
+    obs:obsPartes.join('\n'),dt:today(),capturadoVia:'captacao',
     statusAtendimento:v('capStatus')||'em_conversa',horarioAtendimento:v('capHorario'),
     dataContato:v('capDataContato')||today(),
     numProposta:v('capNumProposta'),
     propostaEnviada:!!(document.getElementById('capPropostaEnviada')||{}).checked
   }
-  const leads=DB.get(S.LEADS);leads.push(l);DB.set(S.LEADS,leads)
-  toast('Lead salvo! Pronto pra próxima ligação.','ok')
+  const clis=DB.get(S.CLIENTES);clis.push(c);DB.set(S.CLIENTES,clis)
+  toast('Cliente salvo! Pronto pra próxima ligação.','ok')
   render('captacao')
 }
 // ===== EDITAR LEAD (Captação) =====
 function editLead(id){
-  const l=DB.get(S.LEADS).find(x=>x.id===id);if(!l)return
+  const l=DB.get(S.CLIENTES).find(x=>x.id===id);if(!l)return
   const statusOpts=Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${l.statusAtendimento===k?'selected':''}>${v.label}</option>`).join('')
   openModal('Editar Lead',`
     <div class="fg"><label>Nome *</label><input id="lNome" value="${l.nome||''}"></div>
@@ -2700,14 +2685,14 @@ function editLead(id){
     `<button class="btn btn-s" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="salvarLead('${id}')">Salvar</button>`)
 }
 function salvarLead(id){
-  const leads=DB.get(S.LEADS);const i=leads.findIndex(x=>x.id===id);if(i<0)return
+  const clis=DB.get(S.CLIENTES);const i=clis.findIndex(x=>x.id===id);if(i<0)return
   const nome=(document.getElementById('lNome')||{}).value||''
   if(!nome.trim()){toast('Informe o nome','err');return}
-  leads[i]={...leads[i],nome:nome.trim(),fone:v('lFone'),email:v('lEmail'),end:v('lEnd'),cep:v('lCep'),cidade:v('lCidade'),
+  clis[i]={...clis[i],nome:nome.trim(),fone:v('lFone'),email:v('lEmail'),end:v('lEnd'),cep:v('lCep'),cidade:v('lCidade'),
     statusAtendimento:v('lStatus'),horarioAtendimento:v('lHorario'),dataContato:v('lDataContato'),
     numProposta:v('lNumProposta'),propostaEnviada:!!(document.getElementById('lPropostaEnviada')||{}).checked,
     obs:(document.getElementById('lObs')||{}).value}
-  DB.set(S.LEADS,leads);closeModal();toast('Lead atualizado!','ok');render('captacao')
+  DB.set(S.CLIENTES,clis);closeModal();toast('Cliente atualizado!','ok');render('captacao')
 }
 
 // ===== ESTOQUE =====
