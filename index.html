@@ -2541,7 +2541,8 @@ const CAPTACAO_STATUS={
   nao_atendeu:{label:'📵 Não atendeu',cor:'#8A7E6E',bg:'#F0EDE8'},
 }
 function captacaoHTML(){
-  const hoje=DB.get(S.CLIENTES).filter(x=>x.dt===today()&&x.capturadoVia==='captacao')
+  const todos=DB.get(S.CLIENTES).filter(x=>x.capturadoVia==='captacao').sort((a,b)=>(b.dt||'').localeCompare(a.dt||''))
+  const hoje=todos.filter(x=>x.dt===today())
   const statusOptsHtml=sel=>Object.entries(CAPTACAO_STATUS).map(([k,v])=>`<option value="${k}" ${sel===k?'selected':''}>${v.label}</option>`).join('')
   return`
   <div class="ph"><div><h2>Captação Rápida</h2><p>Preencha durante a ligação — o endereço vem sozinho a partir do CEP</p></div>
@@ -2575,11 +2576,11 @@ function captacaoHTML(){
     <div class="fg"><label>Produtos / Anotações da ligação</label><textarea id="capNotas" rows="4" placeholder="O que a cliente quer, preferências, observações da conversa..."></textarea></div>
     <button class="btn btn-p" style="width:100%" onclick="salvarCaptacao()">💾 Salvar Cliente</button>
   </div>
-  ${hoje.length?`<div class="card" style="max-width:560px;margin-top:16px">
-    <div class="card-title">Captados hoje (${hoje.length})</div>
-    ${hoje.map(c=>{const st=CAPTACAO_STATUS[c.statusAtendimento]||CAPTACAO_STATUS.em_conversa
+  ${todos.length?`<div class="card" style="max-width:560px;margin-top:16px">
+    <div class="card-title">Clientes Captados (${todos.length})</div>
+    ${todos.map(c=>{const st=CAPTACAO_STATUS[c.statusAtendimento]||CAPTACAO_STATUS.em_conversa
       const linha2=[c.fone?`📞 ${c.fone}`:'',c.email?`✉️ ${c.email}`:''].filter(Boolean).join('  ·  ')
-      const linha3=[c.dataContato?`📅 Contato: ${fmtDate(c.dataContato)}`:'',c.numProposta?`📄 Proposta Nº ${c.numProposta} — ${c.propostaEnviada?'✅ enviada':'⏳ não enviada'}`:''].filter(Boolean).join('  ·  ')
+      const linha3=[c.dt?`📆 Captado: ${fmtDate(c.dt)}`:'',c.dataContato?`📅 Contato: ${fmtDate(c.dataContato)}`:'',c.numProposta?`📄 Proposta Nº ${c.numProposta} — ${c.propostaEnviada?'✅ enviada':'⏳ não enviada'}`:''].filter(Boolean).join('  ·  ')
       return`<div style="padding:9px 0;border-bottom:1px solid var(--cream2);font-size:13px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
         <div>
           <strong>${c.nome}</strong>${c.horarioAtendimento?` · ${c.horarioAtendimento}`:''}
