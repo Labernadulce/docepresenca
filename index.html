@@ -7351,7 +7351,7 @@ function showClientView(raw,docId){
   </div>`:''
   // Logo
   const _logoEl=document.querySelector('.slogo img')
-  const _logoHtml=_logoEl?`<img src="${_logoEl.src}" style="max-height:80px;max-width:96px;object-fit:contain;display:block" alt="">`:'';
+  const _logoHtml=_logoEl?`<img src="${_logoEl.src}" style="width:100%;height:100%;object-fit:contain;display:block" alt="">`:'';
   const ov=document.getElementById('clientViewOverlay')
   ov.style.display='block'
   document.getElementById('sidebar').style.display='none'
@@ -7363,7 +7363,7 @@ function showClientView(raw,docId){
     .cv-cab{display:flex;align-items:center;justify-content:space-between;gap:24px;padding:20px 26px;margin-bottom:26px;background:linear-gradient(135deg,#FDFBF8 0%,#F6EFE2 100%);border:1px solid #E8DCC8;border-radius:14px;box-shadow:0 3px 14px rgba(120,90,40,.07);position:relative;overflow:hidden}
     .cv-cab::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,#B8912A,#D9BC72)}
     .cv-cab-left{display:flex;align-items:center;gap:16px}
-    .cv-cab-logo{width:62px;height:62px;border-radius:12px;overflow:hidden;background:#fff;border:1px solid #E8DCC8;box-shadow:0 2px 6px rgba(120,90,40,.12);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .cv-cab-logo{width:92px;height:92px;border-radius:14px;overflow:hidden;background:#fff;border:1px solid #E8DCC8;box-shadow:0 2px 8px rgba(120,90,40,.14);display:flex;align-items:center;justify-content:center;flex-shrink:0}
     .cv-cab-logo img{width:100%;height:100%;object-fit:contain}
     .cv-cab-right{text-align:right;flex-shrink:0;font-size:12px;color:#5A4A3A;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
     .cv-contact-row{display:flex;align-items:center;gap:6px;justify-content:flex-end;white-space:nowrap}
@@ -7396,8 +7396,8 @@ function showClientView(raw,docId){
         <div class="cv-cab-left">
           ${_logoHtml?`<div class="cv-cab-logo">${_logoHtml}</div>`:''}
           <div>
-            <div style="font-family:'Palatino Linotype',serif;font-size:21px;font-weight:bold;color:#3D3028;line-height:1.2;margin-bottom:3px">${nome}</div>
-            ${er?`<div style="font-size:11px;color:#B8912A;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;margin-bottom:6px">${er}</div>`:''}
+            <div style="font-family:'Palatino Linotype',serif;font-size:29px;font-weight:bold;color:#3D3028;line-height:1.2;margin-bottom:4px">${nome}</div>
+            ${er?`<div style="font-size:13px;color:#B8912A;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">${er}</div>`:''}
             ${ea?`<div style="font-size:11.5px;color:#8A7E70;line-height:1.6">${ea}</div>`:''}
           </div>
         </div>
