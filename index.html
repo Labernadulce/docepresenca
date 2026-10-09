@@ -95,16 +95,18 @@ body{font-family:'Trebuchet MS','Calibri',sans-serif;background:var(--cream);col
 .srch input{width:100%;padding:8px 11px 8px 32px;border:1.5px solid var(--cream2);border-radius:8px;font-size:13px;font-family:inherit;background:var(--cream);outline:none;transition:all .15s;color:var(--txt)}
 .srch input:focus{border-color:var(--cara);background:var(--white)}
 .srch svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--txt3)}
-.tc{overflow-x:auto;border-radius:var(--r);-webkit-overflow-scrolling:touch}
-table{width:100%;border-collapse:collapse;font-size:13px}
-thead th{background:var(--choc);color:rgba(255,255,255,.88);font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;padding:11px 14px;text-align:left;font-weight:700;white-space:nowrap}
-thead th:first-child{border-radius:8px 0 0 0}
-thead th:last-child{border-radius:0 8px 0 0}
+.tc{overflow-x:auto;border-radius:12px;-webkit-overflow-scrolling:touch;border:1px solid var(--cream2);box-shadow:0 2px 12px rgba(74,44,30,.06)}
+table{width:100%;border-collapse:collapse;font-size:13px;background:var(--white)}
+thead th{background:linear-gradient(135deg,#3A2A1C,var(--choc));color:rgba(255,255,255,.92);font-size:10.5px;text-transform:uppercase;letter-spacing:1.1px;padding:13px 14px;text-align:left;font-weight:700;white-space:nowrap;border-bottom:2px solid var(--cara)}
+thead th:first-child{border-radius:11px 0 0 0}
+thead th:last-child{border-radius:0 11px 0 0}
 tbody tr{border-bottom:1px solid var(--cream2);transition:background .12s}
-tbody tr:nth-child(even){background:var(--cream)}
-tbody tr:hover{background:#E8E4DC}
+tbody tr:nth-child(even){background:#FBF8F3}
+tbody tr:hover{background:#F2ECE1}
 tbody tr:last-child{border-bottom:none}
-tbody td{padding:12px 14px;color:var(--txt);vertical-align:middle}
+tbody tr:last-child td:first-child{border-radius:0 0 0 11px}
+tbody tr:last-child td:last-child{border-radius:0 0 11px 0}
+tbody td{padding:13px 14px;color:var(--txt);vertical-align:middle}
 tbody td:first-child{font-weight:600;color:var(--txt2);white-space:nowrap}
 .bdg{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
 .bdg-g{background:#E8F4EE;color:#2E7D52}.bdg-y{background:#FFF3E0;color:#B05000}.bdg-r{background:#FCEAEA;color:var(--bad)}.bdg-b{background:#E3F2FD;color:#1565C0}.bdg-gr{background:var(--cream2);color:var(--txt2)}
@@ -1535,17 +1537,17 @@ function renderOrcTable(){
         <option value="recusado" ${o.status==='recusado'?'selected':''}>Recusado</option>
       </select></td>
       <td data-label="Produção">${prodCol}</td>
-      <td style="white-space:nowrap">
-        <button class="btn-ic" style="margin-right:4px" onclick="verOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button>
-        <button class="btn-ic" style="margin-right:4px" onclick="editOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        <button class="btn-ic" style="margin-right:4px" title="Imprimir" onclick="imprimirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
-        <button class="btn-ic" style="margin-right:4px" title="Link p/ Cliente" onclick="gerarLinkOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        ${(o.parcelas>1||o.entradaPct||(Array.isArray(o.parcelasPlano)&&o.parcelasPlano.length))?`<button class="btn-ic" style="margin-right:4px;color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasOrc('${o.id}')">📋</button>`:''}
-        ${o.status==='aprovado'?`<button class="btn-ic" style="margin-right:4px;color:#7B5EA7" title="Ver Assinatura do Cliente" onclick="verAssinaturaOrc('${o.id}')">✍️</button>`:''}
-        ${o.status==='aprovado'&&!DB.get(S.VENDAS).find(x=>x.orcId===o.id)?`<button class="btn-ic" style="margin-right:4px;color:var(--ok)" title="Gerar Venda" onclick="gerarVendaDeOrc('${o.id}')">💰</button>`:''}
-        ${o.status==='aprovado'&&!DB.get(S.CONTRATOS).find(x=>x.orcId===o.id&&x.status!=='cancelado')?`<button class="btn-ic" style="margin-right:4px;background:#F3EEFA;color:#7B5EA7" title="Gerar Contrato" onclick="gerarContratoDeOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>`:''}
+      <td style="white-space:nowrap"><div style="display:flex;align-items:center;gap:4px;justify-content:flex-end">
+        <button class="btn-ic" onclick="verOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg></button>
+        <button class="btn-ic" onclick="editOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="btn-ic" title="Imprimir" onclick="imprimirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v8H6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></button>
+        <button class="btn-ic" title="Link p/ Cliente" onclick="gerarLinkOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        ${(o.parcelas>1||o.entradaPct||(Array.isArray(o.parcelasPlano)&&o.parcelasPlano.length))?`<button class="btn-ic" style="color:#B8912A" title="Ver/Marcar Parcelas" onclick="verParcelasOrc('${o.id}')">📋</button>`:''}
+        ${o.status==='aprovado'?`<button class="btn-ic" style="color:#7B5EA7" title="Ver Assinatura do Cliente" onclick="verAssinaturaOrc('${o.id}')">✍️</button>`:''}
+        ${o.status==='aprovado'&&!DB.get(S.VENDAS).find(x=>x.orcId===o.id)?`<button class="btn-ic" style="color:var(--ok)" title="Gerar Venda" onclick="gerarVendaDeOrc('${o.id}')">💰</button>`:''}
+        ${o.status==='aprovado'&&!DB.get(S.CONTRATOS).find(x=>x.orcId===o.id&&x.status!=='cancelado')?`<button class="btn-ic" style="background:#F3EEFA;color:#7B5EA7" title="Gerar Contrato" onclick="gerarContratoDeOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 12h6M9 16h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>`:''}
         <button class="btn-ic btn-d" title="Excluir" onclick="excluirOrc('${o.id}')"><svg width="13" height="13" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      </td>
+      </div></td>
     </tr>`}).join('')}
   </tbody></table>`
 }
