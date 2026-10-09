@@ -7395,10 +7395,20 @@ function showClientView(raw,docId){
           </div>
         </div>
         <div class="cv-cab-right">
-          ${(()=>{const _sd=s=>(s||'').replace(/\D/g,'');const _eq=(a,b)=>{const na=_sd(a),nb=_sd(b);return na&&nb&&(na===nb||na.endsWith(nb)||nb.endsWith(na))};return[ew||ef,(!ew&&ef)||_eq(ef,ew)?'':ef,ee].filter(Boolean).map(c=>`<div>${c}</div>`).join('')})()}
+          ${(()=>{const _sd=s=>(s||'').replace(/\D/g,'');const _eq=(a,b)=>{const na=_sd(a),nb=_sd(b);return na&&nb&&(na===nb||na.endsWith(nb)||nb.endsWith(na))}
+            const _waIcon='<svg width="13" height="13" fill="#25D366" viewBox="0 0 24 24" style="vertical-align:-2px;margin-right:4px"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.123.554 4.118 1.524 5.855L.057 23.57a.5.5 0 00.612.612l5.715-1.467A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.882 0-3.65-.49-5.19-1.348l-.37-.214-3.793.974.994-3.793-.228-.381A9.96 9.96 0 012 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/></svg>'
+            const _principal=ew||ef
+            const _segundo=(!ew&&ef)||_eq(ef,ew)?'':ef
+            const _linhas=[]
+            if(_principal)_linhas.push(`<div>${ew?_waIcon:''}${_principal}</div>`)
+            if(_segundo)_linhas.push(`<div>${_segundo}</div>`)
+            if(ee)_linhas.push(`<div>${ee}</div>`)
+            return _linhas.join('')
+          })()}
           ${(()=>{const _links=[]
             if(ig){const _handle=ig.replace(/^@/,'').trim();const _igUrl=/^https?:\/\//i.test(ig)?ig:'https://instagram.com/'+_handle.replace(/^https?:\/\/(www\.)?instagram\.com\//i,'')
-              _links.push(`<a href="${_igUrl}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">📷 ${ig.startsWith('@')?ig:'@'+_handle}</a>`)}
+              const _igIcon='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#C13584" stroke-width="2" style="vertical-align:-2px;margin-right:4px"><rect x="2" y="2" width="20" height="20" rx="6"/><circle cx="12" cy="12" r="5"/><circle cx="17.3" cy="6.7" r="1.1" fill="#C13584" stroke="none"/></svg>'
+              _links.push(`<a href="${_igUrl}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">${_igIcon}${ig.startsWith('@')?ig:'@'+_handle}</a>`)}
             if(cc)_links.push(`<a href="${cc}" target="_blank" rel="noopener" style="color:#B8912A;text-decoration:none;font-weight:700">💍 Perfil no Casamentos.com</a>`)
             return _links.length?`<div style="margin-top:4px;display:flex;flex-direction:column;gap:2px">${_links.join('')}</div>`:''
           })()}
