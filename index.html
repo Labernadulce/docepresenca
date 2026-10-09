@@ -3796,34 +3796,42 @@ function empresaHTML(){
   return`
   <div class="ph"><div><h2>Minha Empresa</h2><p>Dados utilizados nos documentos gerados</p></div>
     <button class="btn btn-p" onclick="salvarEmpresa()">Salvar Dados</button></div>
-  <div class="card">
-    <div class="card-title">Identificação</div>
+  <div class="tabs" id="empTabs">
+    <div class="tab active" onclick="setEmpresaTab('id',this)">Identificação</div>
+    <div class="tab" onclick="setEmpresaTab('end',this)">Endereço</div>
+    <div class="tab" onclick="setEmpresaTab('contato',this)">Contato &amp; Redes</div>
+    <div class="tab" onclick="setEmpresaTab('pix',this)">Pagamento (Pix)</div>
+    <div class="tab" onclick="setEmpresaTab('formas',this)">Formas de Pagamento</div>
+  </div>
+  <div class="card emp-panel" id="empPanel-id">
     <div class="frow"><div class="fg"><label>Nome / Razão Social *</label><input id="eNome" value="${e.nome||''}" placeholder="Doce Arte Confeitaria LTDA"></div>
     <div class="fg"><label>Nome Fantasia</label><input id="eFantasia" value="${e.fantasia||''}" placeholder="Doce Arte"></div></div>
     <div class="frow"><div class="fg"><label>CNPJ</label><input id="eCnpj" value="${e.cnpj||''}" placeholder="00.000.000/0001-00"></div>
     <div class="fg"><label>Inscrição Estadual</label><input id="eIe" value="${e.ie||''}" placeholder="000.000.000.000"></div></div>
-    <div class="divider" style="height:1px;background:var(--cream2);margin:16px 0"></div>
-    <div class="card-title">Endereço</div>
+    <div class="fg"><label>Slogan / Observação no rodapé</label><textarea id="eObs" placeholder="Especializada em bolos artesanais e doces finos...">${e.obs||''}</textarea></div>
+  </div>
+  <div class="card emp-panel" id="empPanel-end" style="display:none">
     <div class="frow"><div class="fg"><label>Logradouro</label><input id="eEnd" value="${e.end||''}" placeholder="Rua das Flores, 123"></div>
     <div class="fg"><label>Bairro</label><input id="eBairro" value="${e.bairro||''}" placeholder="Centro"></div></div>
     <div class="frow t3"><div class="fg"><label>Cidade</label><input id="eCidade" value="${e.cidade||''}" placeholder="São Paulo"></div>
     <div class="fg"><label>Estado</label><input id="eEstado" value="${e.estado||''}" placeholder="SP" maxlength="2"></div>
     <div class="fg"><label>CEP</label><input id="eCep" value="${e.cep||''}" placeholder="00000-000"></div></div>
-    <div class="divider" style="height:1px;background:var(--cream2);margin:16px 0"></div>
-    <div class="card-title">Contato</div>
+  </div>
+  <div class="card emp-panel" id="empPanel-contato" style="display:none">
     <div class="frow"><div class="fg"><label>Telefone / WhatsApp</label><input id="eFone" value="${e.fone||''}" placeholder="(11) 99999-9999"></div>
     <div class="fg"><label>Email</label><input id="eEmail" value="${e.email||''}" placeholder="contato@empresa.com"></div></div>
     <div class="frow"><div class="fg"><label>Site</label><input id="eSite" value="${e.site||''}" placeholder="www.docearte.com.br"></div>
     <div class="fg"><label>WhatsApp (para links de cliente)</label><input id="eWa" value="${e.wa||''}" placeholder="5511999999999"></div></div>
     <div class="frow"><div class="fg"><label>Instagram <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece como link na proposta enviada ao cliente</span></label><input id="eInstagram" value="${e.instagram||''}" placeholder="@labernadulce"></div>
     <div class="fg"><label>Perfil no Casamentos.com <span style="font-weight:400;text-transform:none;color:var(--txt3)">— link completo do seu perfil</span></label><input id="eCasamentos" value="${e.casamentos||''}" placeholder="https://www.casamentos.com.br/fornecedor/..."></div></div>
+  </div>
+  <div class="card emp-panel" id="empPanel-pix" style="display:none">
     <div class="frow"><div class="fg"><label>Chave Pix <span style="font-weight:400;text-transform:none;color:var(--txt3)">— aparece na condição de pagamento de orçamentos e contratos</span></label><input id="eChavePix" value="${e.chavePix||''}" placeholder="CPF, e-mail, telefone ou chave aleatória"></div>
     <div class="fg"><label>Favorecido <span style="font-weight:400;text-transform:none;color:var(--txt3)">— titular da chave Pix</span></label><input id="ePixFavorecido" value="${e.pixFavorecido||''}" placeholder="Nome completo do titular"></div></div>
     <div class="fg"><label>Banco <span style="font-weight:400;text-transform:none;color:var(--txt3)">— instituição da chave Pix, opcional</span></label><input id="ePixBanco" value="${e.pixBanco||''}" placeholder="Ex: InfinitePay (CloudWalk) — Instituição de Pagamento"></div>
     <div class="fg"><label>Handle InfinitePay <span style="font-weight:400;text-transform:none;color:var(--txt3)">— seu @ do InfiniteTag (sem o $), opcional — gera um link de pagamento oficial em vez do QR manual</span></label><input id="eInfinitepayHandle" value="${e.infinitepayHandle||''}" placeholder="Ex: mimosdabe"></div>
-    <div class="fg"><label>Slogan / Observação no rodapé</label><textarea id="eObs" placeholder="Especializada em bolos artesanais e doces finos...">${e.obs||''}</textarea></div>
   </div>
-  <div class="card" style="margin-top:16px">
+  <div class="card emp-panel" id="empPanel-formas" style="display:none">
     <div class="card-title">Formas de Pagamento</div>
     <p style="font-size:13px;color:var(--txt2);margin-bottom:14px">Estas opções aparecem em todos os dropdowns de pagamento (orçamentos, contratos e vendas).</p>
     <div id="pgtosList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
@@ -3837,6 +3845,13 @@ function empresaHTML(){
     <button class="btn btn-p btn-sm" style="margin-left:8px" onclick="salvarPgtos()">Salvar formas de pagamento</button>
     <button class="btn btn-s btn-sm" style="margin-left:8px;font-size:11px" onclick="pgtoRedefinir()">Restaurar padrão</button>
   </div>`
+}
+function setEmpresaTab(tab,el){
+  document.querySelectorAll('#empTabs .tab').forEach(t=>t.classList.remove('active'))
+  el.classList.add('active')
+  document.querySelectorAll('.emp-panel').forEach(p=>p.style.display='none')
+  const panel=document.getElementById('empPanel-'+tab)
+  if(panel)panel.style.display=''
 }
 function pgtoListUpdate(){}
 function pgtoAdicionar(){
