@@ -1637,7 +1637,6 @@ function aplicarAprovacaoOrc(id,opcaoEscolhida){
     }
   }
   statusOrc(id,'aprovado')
-  if(_fdb)_orgCol('contratos_pub').doc(id).set({aprovado:false},{merge:true}).catch(()=>{})
 }
 function novoOrc(fromRomaneio){
   romOrigem=!!fromRomaneio
@@ -8628,7 +8627,6 @@ async function _fbInit(){
         orcs[idx].status='aprovado'
         DB.set(S.ORCAMENTOS,orcs)
         if(avisar)toast(`✅ Orçamento Nº ${orcNumFmt(orcs[idx])} aprovado por ${d.aprovadoPor||'cliente'}!`,'ok')
-        _orgCol('contratos_pub').doc(localId).set({aprovado:false},{merge:true}).catch(()=>{})
         if(page==='orcamentos')render('orcamentos')
       }
       snap.docChanges().forEach(change=>{
