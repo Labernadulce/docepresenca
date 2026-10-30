@@ -2396,7 +2396,7 @@ function imprimirCont(id){
     let num=0
     const rows=cats.flatMap(cat=>[
       ...(cat==='Personalizado'?[]:[`<tr><td colspan="6" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`]),
-      ...itensEfetivos.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr><td class="n">${num}</td><td>${getNomeProd(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td><td class="c">Un</td><td class="c">${it.qtd}</td><td class="r">${fmt(it.pu)}</td><td class="r">${fmt(it.sub)}</td></tr>`})
+      ...itensEfetivos.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr><td class="n">${num}</td><td>${getNomeProd(it)}${it.obs?`<br><span style="font-size:13px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td><td class="c">Un</td><td class="c">${it.qtd}</td><td class="r">${fmt(it.pu)}</td><td class="r">${fmt(it.sub)}</td></tr>`})
     ]).join('')
     prodBlock=`<div class="prod-hdr">PRODUTOS / SERVIÇOS</div>
     <table class="prod-table">
@@ -6296,7 +6296,7 @@ async function imprimirRomaneio(id,opc){
     ...(cat==='Personalizado'?[]:[`<tr><td colspan="4" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`]),
     ...o.itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;return`<tr>
       <td class="n">${num}</td>
-      <td>${getNome(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+      <td>${getNome(it)}${it.obs?`<br><span style="font-size:13px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
       <td class="c">${it.qtd}</td>
       <td class="c" style="font-size:16px">☐</td>
     </tr>`})
@@ -6990,7 +6990,7 @@ async function imprimirOrc(id){
       ...(cat==='Personalizado'?[]:[`<tr><td colspan="6" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`]),
       ...itens.filter(it=>getCat(it.pId)===cat).map(it=>{num++;const _foto=getFotoProd(it);return`<tr>
             <td class="n">${num}</td>
-            <td>${_foto?`<img src="${_foto}" style="width:32px;height:32px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${getNomeProd(it)}${it.obs?`<br><span style="font-size:10px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+            <td>${_foto?`<img src="${_foto}" style="width:32px;height:32px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${getNomeProd(it)}${it.obs?`<br><span style="font-size:13px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
             <td class="c">Un</td>
             <td class="c">${it.qtd}</td>
             <td class="r">${fmt(it.pu)}</td>
@@ -7371,7 +7371,7 @@ function showClientView(raw,docId){
       ...(cat==='Personalizado'?[]:[`<tr><td colspan="4" style="background:#EDE5DA;color:#5A4A3A;padding:7px 10px;font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;border-top:6px solid #fff;border-bottom:1px solid #DDD5C8">${cat}</td></tr>`]),
       ...its.filter(it=>(it.c||'Outros')===cat).map(it=>{_n++;return`<tr style="${_n%2===0?'background:#FAF7F4':''}">
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#9A8E82;font-weight:700;font-size:11px">${_n}</td>
-        <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028">${it.foto?`<img src="${it.foto}" style="width:34px;height:34px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${it.n||''}${it.obs?`<br><span style="font-size:10.5px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
+        <td style="padding:8px 10px;border:1px solid #E8E0D8;color:#3D3028;font-size:14px">${it.foto?`<img src="${it.foto}" style="width:34px;height:34px;border-radius:5px;object-fit:cover;vertical-align:middle;margin-right:8px">`:''}${it.n||''}${it.obs?`<br><span style="font-size:13px;color:#8A7E6E;font-style:italic">${it.obs}</span>`:''}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:center;color:#3D3028">${it.q}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;color:#3D3028">${fmt(it.pu||it.s/(it.q||1))}</td>
         <td style="padding:8px 10px;border:1px solid #E8E0D8;text-align:right;font-weight:600;color:#3D3028">${fmt(it.s)}</td>
