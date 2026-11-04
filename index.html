@@ -190,7 +190,7 @@ table.mobcards tbody td:last-child{border-right:1.5px solid #DDBE6E;border-radiu
 .sidebar-ov{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:99;opacity:0;pointer-events:none;transition:opacity .25s}
 .sidebar-ov.open{opacity:1;pointer-events:all}
 /* ===== RESPONSIVE ===== */
-@media(max-width:768px){
+@media(max-width:1024px){
   :root{--sw:0px;--hh:54px}
   .sidebar{transform:translateX(-260px);width:260px!important;z-index:101}
   .sidebar.open{transform:translateX(0)}
@@ -1075,7 +1075,7 @@ function _navApply(p){
   document.getElementById('hdrTitle').textContent=PTITLES[p]||p
   page=p
   render(p)
-  if(window.innerWidth<=768)closeSidebar()
+  if(window.innerWidth<=1024)closeSidebar()
   window.scrollTo(0,0)
   _navArrows()
 }
@@ -8421,7 +8421,7 @@ function closeSidebar(){
 
 // ===== INIT =====
 function applyMenuVisibility(){
-  const isMob=window.innerWidth<=768
+  const isMob=window.innerWidth<=1024
   const btn=document.getElementById('menuBtn')
   if(btn)btn.style.display=isMob?'flex':'none'
 }
